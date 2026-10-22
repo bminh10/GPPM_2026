@@ -1,16 +1,15 @@
 import { useState } from 'react'
-import { Button, Checkbox, Divider, Form, Input, Segmented, Select, Typography, message } from 'antd'
+import { Button, Checkbox, Form, Input, Segmented, Typography, message } from 'antd'
 import {
-  GoogleOutlined,
   LockOutlined,
   MailOutlined,
   UserOutlined,
-  WindowsOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { ROUTE_PATHS } from '../../routes/menuConfig'
 import { colors } from '../../theme/colors'
-import { markAuthenticated } from '../../utils/auth'
+import { getErrorMessage } from '../../services/apiClient'
+import { signIn, signUp } from '../../services/AuthService'
 import AuthHero from './AuthHero'
 
 export type AuthMode = 'sign-in' | 'sign-up'
@@ -23,17 +22,10 @@ type SignInValues = { email: string; password: string; remember?: boolean }
 type SignUpValues = {
   fullName: string
   email: string
-  role: string
   password: string
   confirm: string
   agree: boolean
 }
-
-const ROLE_OPTIONS = [
-  { value: 'student', label: 'Sinh viên' },
-  { value: 'lecturer', label: 'Giảng viên' },
-  { value: 'admin', label: 'Quản trị cơ sở vật chất' },
-]
 
 export default function AuthPage({ mode }: AuthPageProps) {
   const navigate = useNavigate()
@@ -41,16 +33,21 @@ export default function AuthPage({ mode }: AuthPageProps) {
   const [loading, setLoading] = useState(false)
   const isSignIn = mode === 'sign-in'
 
-  // Demo không có backend: giả lập đăng nhập/đăng ký rồi vào dashboard.
-  const handleSubmit = () => {
+  const submit = async (action: () => Promise<unknown>, successMessage: string) => {
     setLoading(true)
-    window.setTimeout(() => {
+    try {
+      await action()
+      messageApi.success(successMessage)
+      navigate(ROUTE_PATHS.dashboard, { replace: true })
+    } catch (error) {
+      messageApi.error(getErrorMessage(error))
+    } finally {
       setLoading(false)
-      markAuthenticated()
-      messageApi.success(isSignIn ? 'Đăng nhập thành công' : 'Tạo tài khoản thành công')
-      navigate(ROUTE_PATHS.dashboard)
-    }, 700)
+    }
   }
+
+  const handleSignIn = (values: SignInValues) => submit(() => signIn(values), 'Đăng nhập thành công')
+  const handleSignUp = (values: SignUpValues) => submit(() => signUp(values), 'Tạo tài khoản thành công')
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.15fr_1fr]" style={{ background: colors.bg.main }}>
@@ -89,7 +86,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
               size="large"
               requiredMark={false}
               initialValues={{ remember: true }}
-              onFinish={handleSubmit}
+              onFinish={handleSignIn}
             >
               <Form.Item
                 name="email"
@@ -108,12 +105,9 @@ export default function AuthPage({ mode }: AuthPageProps) {
               >
                 <Input.Password prefix={<LockOutlined />} placeholder="••••••••" autoComplete="current-password" />
               </Form.Item>
-              <div className="mb-4 flex items-center justify-between">
-                <Form.Item name="remember" valuePropName="checked" noStyle>
-                  <Checkbox>Ghi nhớ tôi</Checkbox>
-                </Form.Item>
-                <Typography.Link>Quên mật khẩu?</Typography.Link>
-              </div>
+              <Form.Item name="remember" valuePropName="checked">
+                <Checkbox>Ghi nhớ tôi</Checkbox>
+              </Form.Item>
               <Button type="primary" htmlType="submit" block loading={loading}>
                 Đăng nhập
               </Button>
@@ -124,7 +118,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
               layout="vertical"
               size="large"
               requiredMark={false}
-              onFinish={handleSubmit}
+              onFinish={handleSignUp}
             >
               <Form.Item name="fullName" label="Họ và tên" rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}>
                 <Input prefix={<UserOutlined />} placeholder="Nguyễn Văn A" autoComplete="name" />
@@ -138,9 +132,6 @@ export default function AuthPage({ mode }: AuthPageProps) {
                 ]}
               >
                 <Input prefix={<MailOutlined />} placeholder="ten@truong.edu.vn" autoComplete="email" />
-              </Form.Item>
-              <Form.Item name="role" label="Vai trò" rules={[{ required: true, message: 'Vui lòng chọn vai trò' }]}>
-                <Select placeholder="Chọn vai trò" options={ROLE_OPTIONS} />
               </Form.Item>
               <Form.Item
                 name="password"
@@ -189,19 +180,6 @@ export default function AuthPage({ mode }: AuthPageProps) {
               </Button>
             </Form>
           )}
-
-          <Divider plain>
-            <Typography.Text type="secondary">hoặc tiếp tục với</Typography.Text>
-          </Divider>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Button size="large" icon={<GoogleOutlined />}>
-              Google
-            </Button>
-            <Button size="large" icon={<WindowsOutlined />}>
-              Microsoft
-            </Button>
-          </div>
 
           <Typography.Paragraph type="secondary" style={{ textAlign: 'center', marginTop: 24, marginBottom: 0 }}>
             {isSignIn ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}

@@ -1,98 +1,76 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
-from requests import Session
-from db.database import User
+import hmac
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy.orm import Session
+
+from app.auth.dependencies import get_current_user, get_or_create_default_role
+from app.auth.schemas import LoginRequest, RegisterRequest, UserResponse
+from core.security import hash_password, is_hashed, verify_password
+from core.session import clear_session, read_user_id, set_session
+from db.database import User, get_db
 from utils.commit import commit_db
 
-from db.database import get_db
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-router = APIRouter(prefix="/user", tags=["User"])
+def _password_matches(user: User, password: str, db: Session) -> bool:
+    """Kiểm tra mật khẩu; tự nâng cấp tài khoản cũ đang lưu plain text sang bcrypt."""
+    stored = user.pass_word or ""
+    if is_hashed(stored):
+        return verify_password(password, stored)
+    if not hmac.compare_digest(stored.encode(), password.encode()):
+        return False
+    user.pass_word = hash_password(password)
+    db.commit()
+    return True
 
 
-class UserRegister(BaseModel):
-    user_name: str
-    pass_word: str
-    email: str
-    role_id: int
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def register(data: RegisterRequest, response: Response, db: Session = Depends(get_db)):
+    if db.query(User).filter(User.email == data.email).first():
+        raise HTTPException(status.HTTP_409_CONFLICT, "Email đã được sử dụng")
+    if db.query(User).filter(User.user_name == data.user_name).first():
+        raise HTTPException(status.HTTP_409_CONFLICT, "Tên tài khoản đã tồn tại")
 
-class UserLogin(BaseModel):
-    email: str
-    pass_word: str
-
-class UserResponse(BaseModel): 
-    id: int
-    user_name: str
-    model_config = {"from_attributes": True}
-
-# /user/register
-@router.post("/register", response_model=UserResponse)
-def register(user_data: UserRegister, db: Session = Depends(get_db)):
-
-    get_user = db.query(User).where(User.user_name == user_data.user_name).first()
-    if get_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tài khoản đã tồn tại!"
-        )
-
-    new_user = User(
-        user_name=user_data.user_name,
-        pass_word=user_data.pass_word,
-        email=user_data.email,
-        role_id=user_data.role_id
+    # Vai trò luôn do server quyết định, không nhận từ client
+    user = commit_db(
+        User(
+            user_name=data.user_name,
+            email=data.email,
+            pass_word=hash_password(data.pass_word),
+            role_id=get_or_create_default_role(db).id,
+        ),
+        db,
     )
-    return commit_db(new_user, db)
+    set_session(response, user.id)
+    return UserResponse.from_user(user)
 
-@router.post("/login")
-async def login(data: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).where(User.email == data.email).first()
+
+@router.post("/login", response_model=UserResponse)
+def login(data: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == data.email).first()
+    # Cùng một thông báo cho cả hai trường hợp để không lộ email nào đã tồn tại
+    if not user or not _password_matches(user, data.pass_word, db):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email hoặc mật khẩu không đúng")
+    set_session(response, user.id)
+    return UserResponse.from_user(user)
+
+
+@router.post("/refresh", response_model=UserResponse)
+def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
+    user_id = read_user_id(request, "refresh")
+    user = db.get(User, user_id) if user_id is not None else None
     if not user:
-        return {"message" : "Tai khoan khong ton tai!"}
-    if user.pass_word != data.pass_word:
-         return {"message" : "Sai mat khau!"}
-    return {"message" : "Dang nhap thanh cong!"}
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Refresh token không hợp lệ hoặc đã hết hạn")
+    set_session(response, user.id)
+    return UserResponse.from_user(user)
 
-@router.get("/all", response_model=list[UserResponse])
-def get_all_users(db: Session = Depends(get_db)):
-    users = db.query(User).all()
-    return users
 
-@router.patch("/{id}", response_model=UserResponse)
-async def refactor_user(
-    id: int, data: UserLogin, db: Session = Depends(get_db)
-):
-    # 1. Fetch existing user
-    user = db.query(User).filter(User.id == id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tài khoản không tồn tại!",
-        )
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(response: Response):
+    clear_session(response)
 
-    # 2. Apply patch logic on incoming fields
-    if user.email != data.email:
-        data.pass_word = user.pass_word
-    if user.pass_word != data.pass_word:
-        data.email = user.email
 
-    # 3. Update fields on the existing ORM object directly
-    user.pass_word = data.pass_word
-    user.email = data.email
-
-    # 4. Commit updates (SQL: UPDATE "user" SET ...)
-    db.commit()
-    db.refresh(user)
-
-    return user
-
-@router.delete("/{id}")
-async def delete_user_by_id(id: int, db: Session = Depends(get_db)):
-    user = db.query(User).where(User.id == id).first()
-
-    if not user:
-        return  {"message":"Khong tim thay user!"}
-
-    db.delete(user)
-    db.commit()
-    return  {"message":"Da xoa thanh cong!"}
+@router.get("/me", response_model=UserResponse)
+def me(user: User = Depends(get_current_user)):
+    return UserResponse.from_user(user)
