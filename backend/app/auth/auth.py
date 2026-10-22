@@ -50,7 +50,7 @@ async def login(data: UserLogin, db: Session = Depends(get_db)):
     if not user:
         return {"message" : "Tai khoan khong ton tai!"}
     if user.pass_word != data.pass_word:
-         return {"message" : "Sai mat khau!"}
+        return {"message" : "Sai mat khau!"}
     return {"message" : "Dang nhap thanh cong!"}
 
 @router.get("/all", response_model=list[UserResponse])

@@ -12,6 +12,7 @@ import { ROUTE_PATHS } from '../../routes/menuConfig'
 import { colors } from '../../theme/colors'
 import { markAuthenticated } from '../../utils/auth'
 import AuthHero from './AuthHero'
+import axios from "axios";
 
 export type AuthMode = 'sign-in' | 'sign-up'
 
@@ -42,14 +43,24 @@ export default function AuthPage({ mode }: AuthPageProps) {
   const isSignIn = mode === 'sign-in'
 
   // Demo không có backend: giả lập đăng nhập/đăng ký rồi vào dashboard.
-  const handleSubmit = () => {
-    setLoading(true)
+  const handleSubmit = async (value: any) => {
+    // setLoading(true);
     window.setTimeout(() => {
       setLoading(false)
       markAuthenticated()
       messageApi.success(isSignIn ? 'Đăng nhập thành công' : 'Tạo tài khoản thành công')
       navigate(ROUTE_PATHS.dashboard)
     }, 700)
+    // try {
+    //   const res = await axios.post('http://127.0.0.1:8000/user/login', { 'email': value.email, 'pass_word': value.password });
+    //   if(res.status == 200){
+    //     message.success("Dang nhap thanh cong");
+    //   }
+    //   navigate(ROUTE_PATHS.dashboard)
+    // } catch (e) {
+    //   message.error("Dang nhap khong thanh cong");
+    // }
+    // setLoading(false);
   }
 
   return (
@@ -77,7 +88,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
             onChange={(value) => navigate(value === 'sign-in' ? ROUTE_PATHS.signIn : ROUTE_PATHS.signUp)}
             options={[
               { label: 'Đăng nhập', value: 'sign-in' },
-              { label: 'Đăng ký', value: 'sign-up' },
+              // { label: 'Đăng ký', value: 'sign-up' },
             ]}
             style={{ marginBottom: 24 }}
           />
@@ -190,7 +201,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
             </Form>
           )}
 
-          <Divider plain>
+          {/* <Divider plain>
             <Typography.Text type="secondary">hoặc tiếp tục với</Typography.Text>
           </Divider>
 
@@ -201,14 +212,14 @@ export default function AuthPage({ mode }: AuthPageProps) {
             <Button size="large" icon={<WindowsOutlined />}>
               Microsoft
             </Button>
-          </div>
+          </div> */}
 
-          <Typography.Paragraph type="secondary" style={{ textAlign: 'center', marginTop: 24, marginBottom: 0 }}>
+          {/* <Typography.Paragraph type="secondary" style={{ textAlign: 'center', marginTop: 24, marginBottom: 0 }}>
             {isSignIn ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}
             <Typography.Link onClick={() => navigate(isSignIn ? ROUTE_PATHS.signUp : ROUTE_PATHS.signIn)}>
               {isSignIn ? 'Đăng ký ngay' : 'Đăng nhập'}
             </Typography.Link>
-          </Typography.Paragraph>
+          </Typography.Paragraph> */}
         </div>
       </div>
     </div>
