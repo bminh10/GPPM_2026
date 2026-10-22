@@ -8,9 +8,11 @@ from sqlalchemy import (
     String,
     Date,
     Time,
+    DateTime,
     ForeignKey,
     CheckConstraint,
     create_engine,
+    func,
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
@@ -173,6 +175,16 @@ class ThoiKhoaBieu(Base):
     phong_hoc = relationship("PhongHoc", back_populates="thoi_khoa_bieus")
     hoc_ky = relationship("HocKy", back_populates="thoi_khoa_bieus")
     ca_hoc = relationship("CaHoc", back_populates="thoi_khoa_bieus")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    method = Column(String, nullable=False)
+    path = Column(String, nullable=False)
+    status_code = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 # Create tables in the database if they do not exist
