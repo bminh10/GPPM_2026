@@ -7,7 +7,9 @@
         "kind": "campus",
         "id": "nhon-duc",
         "name": "Khuôn viên ĐH Mở TP.HCM (Nhơn Đức)",
-        "zoom": 18.2
+        "zoom": 18.2,
+        "paddingX": 30,
+        "paddingY": 30
       },
       "geometry": {
         "type": "Polygon",
@@ -418,7 +420,9 @@
         "kind": "campus",
         "id": "vo-van-tan",
         "name": "Cơ sở Võ Văn Tần (mẫu)",
-        "zoom": 18.4
+        "zoom": 18.4,
+        "paddingX": 22,
+        "paddingY": 22
       },
       "geometry": {
         "type": "Polygon",
