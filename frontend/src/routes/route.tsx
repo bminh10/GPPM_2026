@@ -4,12 +4,11 @@ import Dashboard from '../pages/Dashboard/Dashboard'
 import Map from '../pages/Map/Map'
 import Setting from '../pages/Settings/Setting'
 import AuthPage from '../pages/Auth/AuthPage'
-import ProtectedRoute, { PublicOnlyRoute } from './ProtectedRoute'
-import { isAuthenticated } from '../utils/auth'
+import ProtectedRoute, { PublicOnlyRoute, RootRedirect } from './ProtectedRoute'
 import { ROUTE_PATHS } from './menuConfig'
 
 export const route = createBrowserRouter([
-  { path: '/', element: <Navigate to={isAuthenticated() ? ROUTE_PATHS.dashboard : ROUTE_PATHS.signIn} replace /> },
+  { path: '/', element: <RootRedirect /> },
   { path: ROUTE_PATHS.signIn, element: <PublicOnlyRoute><AuthPage mode="sign-in" /></PublicOnlyRoute> },
   { path: ROUTE_PATHS.signUp, element: <PublicOnlyRoute><AuthPage mode="sign-up" /></PublicOnlyRoute> },
   {
