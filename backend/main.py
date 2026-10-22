@@ -1,56 +1,60 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.analytics.analytics import router as routerAnalytics
 from app.auth.auth import router as routerAuth
 from app.campus.campus import router as routerCampus
+from app.classes.classes import router as routerClasses
 from app.dashboard.dashboard import router as routerDashboard
+from app.majors.majors import router as routerMajors
 from app.optimization.optimization import router as routerOptimization
 from app.resources.resources import router as routerResources
 from app.rooms.rooms import router as routerRooms
 from app.schedules.schedules import router as routerSchedules
 from app.semesters.semesters import router as routerSemesters
+from app.subjects.subjects import router as routerSubjects
 from app.time_slots.time_slots import router as routerTimeSlots
-from db.database import AuditLog, SessionLocal
+from app.users.users import router as routerUsers
+from core.config import CORS_ORIGINS
+from middleware.audit import AuditLogMiddleware
+from middleware.auth import AuthMiddleware
 
 app = FastAPI(version="1.0")
 
-app.include_router(routerAuth)
-app.include_router(routerCampus)
-app.include_router(routerSemesters)
-app.include_router(routerTimeSlots)
-app.include_router(routerSchedules)
-app.include_router(routerRooms)
-app.include_router(routerDashboard)
-app.include_router(routerAnalytics)
-app.include_router(routerOptimization)
-app.include_router(routerResources)
+for router in (
+    routerAuth,
+    routerUsers,
+    routerCampus,
+    routerMajors,
+    routerClasses,
+    routerRooms,
+    routerSubjects,
+    routerSemesters,
+    routerTimeSlots,
+    routerSchedules,
+    routerDashboard,
+    routerAnalytics,
+    routerOptimization,
+    routerResources,
+):
+    app.include_router(router)
 
+# Middleware thêm sau sẽ chạy ngoài cùng: CORS phải ngoài cùng để cả phản hồi 401 cũng có header CORS
+app.add_middleware(AuditLogMiddleware)
+app.add_middleware(AuthMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.middleware("http")
-async def record_audit_log(request: Request, call_next):
-    response = await call_next(request)
-    is_mutation = request.method in {"PATCH", "PUT", "DELETE"} or (
-        request.method == "POST"
-        and request.url.path not in {
-            "/schedules/check-conflicts",
-            "/optimization/room-allocation",
-            "/user/login",
-        }
-    )
-    if is_mutation:
-        with SessionLocal() as db:
-            db.add(
-                AuditLog(
-                    method=request.method,
-                    path=request.url.path,
-                    status_code=response.status_code,
-                )
-            )
-            db.commit()
-    return response
 
 @app.get("/")
 async def root():
     return {"message": "OK"}
+
 
 @app.get("/health")
 async def health():
