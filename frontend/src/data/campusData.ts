@@ -51,6 +51,8 @@ export const ROOM_STATE_META: Record<RoomState, { label: string; color: string }
   maintenance: { label: 'Bảo trì', color: colors.campus.maintenance },
 }
 
+const METERS_PER_DEG = 111320
+
 type GeoFeature = {
   properties: Record<string, unknown>
   geometry: { coordinates: number[][][] }
@@ -64,7 +66,24 @@ function centroid(ring: LngLat[]): LngLat {
   return [(Math.min(...lngs) + Math.max(...lngs)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2]
 }
 
-/** Chuyển GeoJSON FeatureCollection (campus/building/room/walkway) thành dataset. */
+/** Hình chữ nhật bao quanh các tòa, nới ra `padX` (Đông-Tây) và `padY` (Bắc-Nam) mét. */
+function paddedBounds(buildings: Building[], padX: number, padY: number): LngLat[] {
+  const points = buildings.flatMap((b) => b.polygon)
+  const lngs = points.map((p) => p[0])
+  const lats = points.map((p) => p[1])
+  const midLat = (Math.min(...lats) + Math.max(...lats)) / 2
+  const dLng = padX / (METERS_PER_DEG * Math.cos((midLat * Math.PI) / 180))
+  const dLat = padY / METERS_PER_DEG
+  const [w, e] = [Math.min(...lngs) - dLng, Math.max(...lngs) + dLng]
+  const [s, n] = [Math.min(...lats) - dLat, Math.max(...lats) + dLat]
+  return [[w, s], [e, s], [e, n], [w, n]]
+}
+
+/**
+ * Chuyển GeoJSON FeatureCollection (campus/building/room/walkway) thành dataset.
+ * Feature `campus` có thể khai báo `paddingX`/`paddingY` (mét) để tự tính nền từ các tòa;
+ * nếu không có thì dùng polygon của chính feature đó.
+ */
 export function parseCampusGeoJSON(collection: { features: unknown[] }): CampusDataset {
   const features = collection.features as GeoFeature[]
   const of = (kind: string) => features.filter((f) => f.properties.kind === kind)
@@ -104,7 +123,14 @@ export function parseCampusGeoJSON(collection: { features: unknown[] }): CampusD
 
   const campuses: Campus[] = of('campus').map((f) => {
     const p = f.properties
-    const boundary = ringOf(f)
+    const hasPadding = p.paddingX !== undefined || p.paddingY !== undefined
+    const boundary = hasPadding
+      ? paddedBounds(
+          buildings.filter((b) => b.campusId === p.id),
+          (p.paddingX as number) ?? 22,
+          (p.paddingY as number) ?? 22,
+        )
+      : ringOf(f)
     const walk = of('walkway').find((w) => w.properties.campusId === p.id)
     return {
       id: p.id as string,
