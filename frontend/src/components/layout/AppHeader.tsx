@@ -1,9 +1,9 @@
-import { Avatar, Button, Flex, Layout, Space, Typography } from 'antd'
-import { LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, UserOutlined } from '@ant-design/icons'
+import { Button, Flex, Layout, Space } from 'antd'
+import { LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { ROUTE_PATHS } from '../../routes/menuConfig'
 import { logOut } from '../../services/AuthService'
-import { useAuth } from '../../store/authStore'
+import UserMenu from './UserMenu'
 
 type AppHeaderProps = {
   collapsed: boolean
@@ -12,7 +12,6 @@ type AppHeaderProps = {
 
 export default function AppHeader({ collapsed, onToggle }: AppHeaderProps) {
   const navigate = useNavigate()
-  const { user } = useAuth()
 
   const handleLogout = async () => {
     await logOut().catch(() => undefined)
@@ -37,8 +36,7 @@ export default function AppHeader({ collapsed, onToggle }: AppHeaderProps) {
           onClick={onToggle}
         />
         <Space>
-          <Typography.Text strong>{user?.user_name}</Typography.Text>
-          <Avatar icon={<UserOutlined />} style={{ background: 'var(--color-primary)' }} />
+          <UserMenu />
           <Button type="text" icon={<LogoutOutlined />} onClick={handleLogout}>
             Đăng xuất
           </Button>
