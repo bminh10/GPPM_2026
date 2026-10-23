@@ -50,7 +50,7 @@ def register(data: RegisterRequest, response: Response, db: Session = Depends(ge
 def login(data: LoginRequest, response: Response, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
     # Cùng một thông báo cho cả hai trường hợp để không lộ email nào đã tồn tại
-    if not user or not _password_matches(user, data.pass_word, db):
+    if not user or not _password_matches(user, data.pass_word, db) or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email hoặc mật khẩu không đúng")
     set_session(response, user.id)
     return UserResponse.from_user(user)
@@ -60,7 +60,8 @@ def login(data: LoginRequest, response: Response, db: Session = Depends(get_db))
 def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
     user_id = read_user_id(request, "refresh")
     user = db.get(User, user_id) if user_id is not None else None
-    if not user:
+    if not user or not user.is_active:
+        clear_session(response)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Refresh token không hợp lệ hoặc đã hết hạn")
     set_session(response, user.id)
     return UserResponse.from_user(user)

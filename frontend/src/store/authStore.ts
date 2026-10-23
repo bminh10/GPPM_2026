@@ -5,6 +5,7 @@ export type AuthUser = {
   user_name: string
   email: string
   role: string | null
+  is_active: boolean
 }
 
 export type AuthStatus = 'loading' | 'authenticated' | 'anonymous'
