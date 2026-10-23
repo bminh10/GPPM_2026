@@ -12,6 +12,7 @@ import {
   Space,
   Spin,
   Typography,
+  Tabs,
   Upload,
   message,
 } from 'antd'
@@ -393,7 +394,7 @@ export default function CourseRegistrationTab() {
   return (
     <Space direction="vertical" size="large" style={{ display: 'flex' }}>
       {contextHolder}
-      {/* <Card title="Tạo đăng ký môn học">
+      <Card title="Tạo đăng ký môn học">
         {referencesError && (
           <Alert
             type="error"
@@ -450,7 +451,7 @@ export default function CourseRegistrationTab() {
             Tạo đăng ký
           </Button>
         </Form>
-      </Card> */}
+      </Card>
       <Card
         title="Nhập đăng ký môn học bằng CSV"
         extra={
@@ -556,20 +557,58 @@ export default function CourseRegistrationTab() {
         ) : registrations.length === 0 ? (
           <Empty description="Chưa có đăng ký môn học" />
         ) : (
-          <SearchableTable<Registration>
-            rowKey={(registration) => registration.id}
-            columns={columns}
-            dataSource={registrations}
-            getSearchText={(registration) => [
-              classes.find((item) => item.id === registration.lop_id)?.name,
-              subjects.find((item) => item.id === registration.mon_id)?.name,
-              semesters.find((item) => item.id === registration.hoc_ky_id)?.name,
-              registration.so_luong,
-            ].join(' ')}
-            searchPlaceholder="Tìm theo lớp, môn học hoặc học kỳ..."
-            onBulkDelete={handleBulkDelete}
-            emptyText="Không tìm thấy đăng ký môn học"
-            pagination={{ pageSize: 8, showSizeChanger: false }}
+          <Tabs
+            items={[
+              ...semesters.map((semester) => {
+                const semesterRegistrations = registrations.filter(
+                  (registration) => registration.hoc_ky_id === semester.id,
+                )
+                return {
+                  key: String(semester.id),
+                  label: `${semester.name} (${semesterRegistrations.length})`,
+                  children: semesterRegistrations.length === 0 ? (
+                    <Empty description={`Chưa có đăng ký trong ${semester.name}`} />
+                  ) : (
+                    <SearchableTable<Registration>
+                      rowKey={(registration) => registration.id}
+                      columns={columns}
+                      dataSource={semesterRegistrations}
+                      getSearchText={(registration) => [
+                        classes.find((item) => item.id === registration.lop_id)?.name,
+                        subjects.find((item) => item.id === registration.mon_id)?.name,
+                        registration.so_luong,
+                      ].join(' ')}
+                      searchPlaceholder="Tìm theo lớp hoặc môn học..."
+                      onBulkDelete={handleBulkDelete}
+                      emptyText="Không tìm thấy đăng ký môn học"
+                      pagination={{ pageSize: 8, showSizeChanger: false }}
+                    />
+                  ),
+                }
+              }),
+              {
+                key: 'unassigned',
+                label: `Chưa gán học kỳ (${registrations.filter((registration) => registration.hoc_ky_id === null).length})`,
+                children: registrations.some((registration) => registration.hoc_ky_id === null) ? (
+                  <SearchableTable<Registration>
+                    rowKey={(registration) => registration.id}
+                    columns={columns}
+                    dataSource={registrations.filter((registration) => registration.hoc_ky_id === null)}
+                    getSearchText={(registration) => [
+                      classes.find((item) => item.id === registration.lop_id)?.name,
+                      subjects.find((item) => item.id === registration.mon_id)?.name,
+                      registration.so_luong,
+                    ].join(' ')}
+                    searchPlaceholder="Tìm theo lớp hoặc môn học..."
+                    onBulkDelete={handleBulkDelete}
+                    emptyText="Không tìm thấy đăng ký môn học"
+                    pagination={{ pageSize: 8, showSizeChanger: false }}
+                  />
+                ) : (
+                  <Empty description="Không có đăng ký chưa gán học kỳ" />
+                ),
+              },
+            ]}
           />
         )}
       </Card>

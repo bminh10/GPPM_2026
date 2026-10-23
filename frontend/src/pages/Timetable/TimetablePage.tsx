@@ -12,8 +12,10 @@ import {
   Tag,
   Tooltip,
   Typography,
+  message,
 } from 'antd'
 import { LeftOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
+import axios from 'axios'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 
@@ -32,6 +34,7 @@ type Schedule = {
   is_thuc_hanh: boolean
 }
 
+type RegistrationOption = { id: number; so_luong: number; hoc_ky_id: number | null }
 type NamedOption = { id: number; name: string }
 type ClassOption = NamedOption & { si_so: number }
 type RoomOption = NamedOption & {
@@ -79,6 +82,7 @@ function formatTime(value: string) {
 
 export default function TimetablePage() {
   const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [registrations, setRegistrations] = useState<RegistrationOption[]>([])
   const [classes, setClasses] = useState<ClassOption[]>([])
   const [subjects, setSubjects] = useState<NamedOption[]>([])
   const [rooms, setRooms] = useState<RoomOption[]>([])
@@ -95,20 +99,25 @@ export default function TimetablePage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [referenceReloadKey, setReferenceReloadKey] = useState(0)
   const [loadedScheduleKey, setLoadedScheduleKey] = useState<string | null>(null)
+  const [draggedScheduleId, setDraggedScheduleId] = useState<number | null>(null)
+  const [movingScheduleId, setMovingScheduleId] = useState<number | null>(null)
+  const [messageApi, contextHolder] = message.useMessage()
 
   useEffect(() => {
     let active = true
     Promise.all([
       apiClient.get<ClassOption[]>('/classes'),
+      apiClient.get<RegistrationOption[]>('/course-registrations'),
       apiClient.get<NamedOption[]>('/subjects'),
       apiClient.get<RoomOption[]>('/rooms'),
       apiClient.get<CampusOption[]>('/campus/all'),
       apiClient.get<SemesterOption[]>('/semesters'),
       apiClient.get<TimeSlotOption[]>('/time-slots'),
     ])
-      .then(([classesResult, subjectsResult, roomsResult, campusesResult, semestersResult, slotsResult]) => {
+      .then(([classesResult, registrationsResult, subjectsResult, roomsResult, campusesResult, semestersResult, slotsResult]) => {
         if (!active) return
         setClasses(classesResult.data)
+        setRegistrations(registrationsResult.data)
         setSubjects(subjectsResult.data)
         setRooms(roomsResult.data)
         setCampuses(campusesResult.data)
@@ -201,8 +210,78 @@ export default function TimetablePage() {
 
   const selectedSemester = semesters.find((semester) => semester.id === semesterId)
 
+  const moveSchedule = async (schedule: Schedule, dayOfWeek: number, timeSlotId: number) => {
+    setDraggedScheduleId(null)
+    if (schedule.day_of_week === dayOfWeek && schedule.ca_hoc_id === timeSlotId) return
+    const registration = registrations.find((item) => item.id === schedule.dang_ky_mon_hoc_id)
+    if (!registration) {
+      messageApi.error('Không tìm thấy đăng ký môn học liên kết với lịch này.')
+      return
+    }
+    if (registration.hoc_ky_id === null) {
+      messageApi.error('Đăng ký môn học chưa được gán học kỳ nên không thể cập nhật lịch.')
+      return
+    }
+
+    setMovingScheduleId(schedule.id)
+    const currentRoom = rooms.find((item) => item.id === schedule.phong_hoc_id)
+    const alternatives = rooms
+      .filter((room) =>
+        room.id !== schedule.phong_hoc_id &&
+        room.capacity >= (registration?.so_luong ?? 0) &&
+        (!schedule.is_thuc_hanh || room.is_thuc_hanh),
+      )
+      .sort((left, right) => {
+        const leftCampusPenalty = left.campus_id === currentRoom?.campus_id ? 0 : 1
+        const rightCampusPenalty = right.campus_id === currentRoom?.campus_id ? 0 : 1
+        return leftCampusPenalty - rightCampusPenalty || left.capacity - right.capacity
+      })
+    let allocatedRoom: RoomOption | undefined
+    let lastConflict: unknown
+    try {
+      const updateSchedule = (roomId: number) => apiClient.patch(`/schedules/${schedule.id}`, {
+        hoc_ky_id: registration.hoc_ky_id,
+        day_of_week: dayOfWeek,
+        ca_hoc_id: timeSlotId,
+        phong_hoc_id: roomId,
+      })
+      try {
+        await updateSchedule(schedule.phong_hoc_id)
+      } catch (error: unknown) {
+        if (!axios.isAxiosError(error) || error.response?.status !== 409) throw error
+        lastConflict = error
+        for (const room of alternatives) {
+          try {
+            await updateSchedule(room.id)
+            allocatedRoom = room
+            break
+          } catch (alternativeError: unknown) {
+            if (!axios.isAxiosError(alternativeError) || alternativeError.response?.status !== 409) {
+              throw alternativeError
+            }
+            lastConflict = alternativeError
+          }
+        }
+        if (!allocatedRoom) throw lastConflict
+      }
+      messageApi.success(
+        allocatedRoom
+          ? `Đã chuyển lịch và tự đổi sang phòng ${allocatedRoom.name}`
+          : schedule.hoc_ky_id !== registration.hoc_ky_id
+            ? 'Đã đồng bộ học kỳ lịch theo đăng ký và chuyển sang thứ/ca mới'
+            : 'Đã chuyển lịch sang thứ/ca học mới',
+      )
+      setReloadKey((key) => key + 1)
+    } catch (error: unknown) {
+      messageApi.error(getErrorMessage(error))
+    } finally {
+      setMovingScheduleId(null)
+    }
+  }
+
   return (
     <Space direction="vertical" size="large" style={{ display: 'flex' }}>
+      {contextHolder}
       <Flex align="center" justify="space-between" wrap="wrap" gap={12}>
         <div>
           <Typography.Title level={3} style={{ margin: 0 }}>Thời khóa biểu</Typography.Title>
@@ -320,7 +399,10 @@ export default function TimetablePage() {
           <Empty description="Không có lịch học trong tuần này" />
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <div
+              <Typography.Text type="secondary" style={{ display: 'block', margin: '0 0 10px 4px' }}>
+                Kéo thả một buổi học sang ô thứ/ca khác để tự lưu. Nếu phòng bị trùng, hệ thống thử đổi sang phòng phù hợp khác; lịch thực hành có màu tím.
+              </Typography.Text>
+              <div
               style={{
                 display: 'grid',
                 gridTemplateColumns: '112px repeat(7, minmax(145px, 1fr))',
@@ -346,6 +428,11 @@ export default function TimetablePage() {
                   subjects={subjects}
                   rooms={rooms}
                   campuses={campuses}
+                  draggedScheduleId={draggedScheduleId}
+                  movingScheduleId={movingScheduleId}
+                  onDragStart={setDraggedScheduleId}
+                  onDragEnd={() => setDraggedScheduleId(null)}
+                  onDrop={moveSchedule}
                 />
               ))}
             </div>
@@ -372,9 +459,27 @@ type FragmentRowProps = {
   subjects: NamedOption[]
   rooms: RoomOption[]
   campuses: CampusOption[]
+  draggedScheduleId: number | null
+  movingScheduleId: number | null
+  onDragStart: (scheduleId: number) => void
+  onDragEnd: () => void
+  onDrop: (schedule: Schedule, dayOfWeek: number, timeSlotId: number) => void
 }
 
-function FragmentRow({ slot, weekDays, schedules, classes, subjects, rooms, campuses }: FragmentRowProps) {
+function FragmentRow({
+  slot,
+  weekDays,
+  schedules,
+  classes,
+  subjects,
+  rooms,
+  campuses,
+  draggedScheduleId,
+  movingScheduleId,
+  onDragStart,
+  onDragEnd,
+  onDrop,
+}: FragmentRowProps) {
   return (
     <>
       <div
@@ -407,6 +512,14 @@ function FragmentRow({ slot, weekDays, schedules, classes, subjects, rooms, camp
               padding: 6,
               borderBottom: '1px solid #e5e7eb',
               borderRight: '1px solid #e5e7eb',
+              background: draggedScheduleId !== null ? '#f6ffed' : undefined,
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault()
+              const scheduleId = Number(event.dataTransfer.getData('text/plain'))
+              const schedule = schedules.find((item) => item.id === scheduleId)
+              if (schedule) onDrop(schedule, day.dayOfWeek, slot.id)
             }}
           >
             {items.map((schedule) => {
@@ -414,6 +527,9 @@ function FragmentRow({ slot, weekDays, schedules, classes, subjects, rooms, camp
               const subject = subjects.find((item) => item.id === schedule.mon_hoc_id)
               const room = rooms.find((item) => item.id === schedule.phong_hoc_id)
               const campus = campuses.find((item) => item.id === room?.campus_id)
+              const practiceStyle = schedule.is_thuc_hanh
+                ? { color: '#531dab', backgroundColor: '#efdbff', borderColor: '#9254de' }
+                : { color: '#0958d9', backgroundColor: '#e6f4ff', borderColor: '#69b1ff' }
               const scheduleDetails = (
                 <Space direction="vertical" size={2}>
                   <Typography.Text strong style={{ color: 'white' }}>
@@ -449,8 +565,22 @@ function FragmentRow({ slot, weekDays, schedules, classes, subjects, rooms, camp
                 <Tooltip key={schedule.id} title={scheduleDetails} placement="top" mouseEnterDelay={0.2}>
                   <Card
                     size="small"
-                    styles={{ body: { padding: 8 } }}
-                    style={{ marginBottom: 6, borderLeft: '3px solid #1677ff', cursor: 'help' }}
+                    styles={{ body: { padding: 8, backgroundColor: practiceStyle.backgroundColor } }}
+                    draggable={movingScheduleId === null}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'move'
+                      event.dataTransfer.setData('text/plain', String(schedule.id))
+                      onDragStart(schedule.id)
+                    }}
+                    onDragEnd={onDragEnd}
+                    style={{
+                      marginBottom: 6,
+                      borderLeft: `3px solid ${practiceStyle.color}`,
+                      borderColor: practiceStyle.borderColor,
+                      backgroundColor: practiceStyle.backgroundColor,
+                      cursor: movingScheduleId === schedule.id ? 'wait' : 'grab',
+                      opacity: movingScheduleId === schedule.id ? 0.6 : 1,
+                    }}
                   >
                     <Typography.Text strong style={{ display: 'block' }}>
                       {subject?.name ?? 'Môn học không xác định'}
@@ -472,7 +602,7 @@ function FragmentRow({ slot, weekDays, schedules, classes, subjects, rooms, camp
                       GV: {schedule.teacher_name?.trim() || 'Chưa cập nhật'}
                     </Typography.Text>
                     {schedule.is_thuc_hanh && (
-                      <Tag color="blue" style={{ marginTop: 5, marginInlineEnd: 0 }}>Thực hành</Tag>
+                      <Tag color="purple" style={{ marginTop: 5, marginInlineEnd: 0 }}>Thực hành</Tag>
                     )}
                   </Card>
                 </Tooltip>
