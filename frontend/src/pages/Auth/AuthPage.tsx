@@ -11,7 +11,6 @@ import { colors } from '../../theme/colors'
 import { getErrorMessage } from '../../services/apiClient'
 import { signIn, signUp } from '../../services/AuthService'
 import AuthHero from './AuthHero'
-import axios from "axios";
 
 export type AuthMode = 'sign-in' | 'sign-up'
 
