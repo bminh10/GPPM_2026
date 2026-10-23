@@ -114,6 +114,7 @@ def find_conflicts(
     candidates = (
         db.query(ThoiKhoaBieu)
         .filter(
+            ThoiKhoaBieu.hoc_ky_id == values["hoc_ky_id"],
             ThoiKhoaBieu.day_of_week == values["day_of_week"],
             ThoiKhoaBieu.start_date <= values["end_date"],
             ThoiKhoaBieu.end_date >= values["start_date"],
