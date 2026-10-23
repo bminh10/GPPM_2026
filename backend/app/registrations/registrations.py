@@ -68,10 +68,15 @@ def _ensure_unique(
     )
     if exclude_id is not None:
         query = query.filter(DangKyMonHoc.id != exclude_id)
-    if query.first() is not None:
+    duplicate = query.first()
+    if duplicate is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Lớp đã đăng ký môn học này trong học kỳ đã chọn.",
+            detail=(
+                f"Lớp đã đăng ký môn học này trong học kỳ đã chọn (mã đăng ký "
+                f"{duplicate.id}). Hãy chọn học kỳ tương ứng trong danh sách và "
+                "sửa đăng ký hiện có thay vì tạo mới."
+            ),
         )
 
 
@@ -121,10 +126,11 @@ def create_registration(data: RegistrationData, db: Session = Depends(get_db)):
         return commit_db(registration, db)
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Lớp đã đăng ký môn học này trong học kỳ đã chọn.",
-        ) from exc
+        try:
+            _ensure_unique(db, values["lop_id"], values["mon_id"], values["hoc_ky_id"])
+        except HTTPException as conflict:
+            raise conflict from exc
+        raise
 
 
 @router.patch("/{registration_id}", response_model=RegistrationResponse)
@@ -186,10 +192,17 @@ def update_registration(
         db.refresh(registration)
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Lớp đã đăng ký môn học này trong học kỳ đã chọn.",
-        ) from exc
+        try:
+            _ensure_unique(
+                db,
+                values["lop_id"],
+                values["mon_id"],
+                values["hoc_ky_id"],
+                exclude_id=registration_id,
+            )
+        except HTTPException as conflict:
+            raise conflict from exc
+        raise
     return registration
 
 

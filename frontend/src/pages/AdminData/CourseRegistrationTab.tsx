@@ -12,7 +12,6 @@ import {
   Space,
   Spin,
   Typography,
-  Tabs,
   Upload,
   message,
 } from 'antd'
@@ -152,6 +151,7 @@ export default function CourseRegistrationTab() {
   const [createdCount, setCreatedCount] = useState<number | null>(null)
   const [failures, setFailures] = useState<ImportFailure[]>([])
   const [editing, setEditing] = useState<Registration | null>(null)
+  const [selectedSemesterKeyState, setSelectedSemesterKey] = useState<string>()
   const [saving, setSaving] = useState(false)
   const [creating, setCreating] = useState(false)
   const [messageApi, contextHolder] = message.useMessage()
@@ -391,6 +391,37 @@ export default function CourseRegistrationTab() {
     [classes, form, handleDelete, semesters, subjects],
   )
 
+  const unassignedRegistrations = registrations.filter(
+    (registration) => registration.hoc_ky_id === null,
+  )
+  const semesterOptions = [
+    ...semesters.map((semester) => ({
+      value: String(semester.id),
+      label: `${semester.name} (${registrations.filter(
+        (registration) => registration.hoc_ky_id === semester.id,
+      ).length})`,
+    })),
+    {
+      value: 'unassigned',
+      label: `Chưa gán học kỳ (${unassignedRegistrations.length})`,
+    },
+  ]
+  const selectedSemesterKey = semesterOptions.some(
+    (option) => option.value === selectedSemesterKeyState,
+  )
+    ? selectedSemesterKeyState
+    : semesterOptions[0]?.value
+  const selectedSemester = useMemo(() => {
+    if (selectedSemesterKey === 'unassigned') return null
+    return semesters.find((semester) => String(semester.id) === selectedSemesterKey) ?? null
+  }, [selectedSemesterKey, semesters])
+  const selectedRegistrations =
+    selectedSemesterKey === 'unassigned'
+      ? unassignedRegistrations
+      : registrations.filter(
+        (registration) => String(registration.hoc_ky_id) === selectedSemesterKey,
+      )
+
   return (
     <Space direction="vertical" size="large" style={{ display: 'flex' }}>
       {contextHolder}
@@ -557,59 +588,39 @@ export default function CourseRegistrationTab() {
         ) : registrations.length === 0 ? (
           <Empty description="Chưa có đăng ký môn học" />
         ) : (
-          <Tabs
-            items={[
-              ...semesters.map((semester) => {
-                const semesterRegistrations = registrations.filter(
-                  (registration) => registration.hoc_ky_id === semester.id,
-                )
-                return {
-                  key: String(semester.id),
-                  label: `${semester.name} (${semesterRegistrations.length})`,
-                  children: semesterRegistrations.length === 0 ? (
-                    <Empty description={`Chưa có đăng ký trong ${semester.name}`} />
-                  ) : (
-                    <SearchableTable<Registration>
-                      rowKey={(registration) => registration.id}
-                      columns={columns}
-                      dataSource={semesterRegistrations}
-                      getSearchText={(registration) => [
-                        classes.find((item) => item.id === registration.lop_id)?.name,
-                        subjects.find((item) => item.id === registration.mon_id)?.name,
-                        registration.so_luong,
-                      ].join(' ')}
-                      searchPlaceholder="Tìm theo lớp hoặc môn học..."
-                      onBulkDelete={handleBulkDelete}
-                      emptyText="Không tìm thấy đăng ký môn học"
-                      pagination={{ pageSize: 8, showSizeChanger: false }}
-                    />
-                  ),
+          <Space direction="vertical" size="middle" style={{ display: 'flex' }}>
+            <SearchFilterSelect
+              aria-label="Chọn học kỳ đăng ký môn học"
+              value={selectedSemesterKey}
+              options={semesterOptions}
+              onChange={(value) => setSelectedSemesterKey(String(value))}
+              style={{ width: 360, maxWidth: '100%' }}
+            />
+            {selectedRegistrations.length === 0 ? (
+              <Empty
+                description={
+                  selectedSemester
+                    ? `Chưa có đăng ký trong ${selectedSemester.name}`
+                    : 'Không có đăng ký chưa gán học kỳ'
                 }
-              }),
-              {
-                key: 'unassigned',
-                label: `Chưa gán học kỳ (${registrations.filter((registration) => registration.hoc_ky_id === null).length})`,
-                children: registrations.some((registration) => registration.hoc_ky_id === null) ? (
-                  <SearchableTable<Registration>
-                    rowKey={(registration) => registration.id}
-                    columns={columns}
-                    dataSource={registrations.filter((registration) => registration.hoc_ky_id === null)}
-                    getSearchText={(registration) => [
-                      classes.find((item) => item.id === registration.lop_id)?.name,
-                      subjects.find((item) => item.id === registration.mon_id)?.name,
-                      registration.so_luong,
-                    ].join(' ')}
-                    searchPlaceholder="Tìm theo lớp hoặc môn học..."
-                    onBulkDelete={handleBulkDelete}
-                    emptyText="Không tìm thấy đăng ký môn học"
-                    pagination={{ pageSize: 8, showSizeChanger: false }}
-                  />
-                ) : (
-                  <Empty description="Không có đăng ký chưa gán học kỳ" />
-                ),
-              },
-            ]}
-          />
+              />
+            ) : (
+              <SearchableTable<Registration>
+                rowKey={(registration) => registration.id}
+                columns={columns}
+                dataSource={selectedRegistrations}
+                getSearchText={(registration) => [
+                  classes.find((item) => item.id === registration.lop_id)?.name,
+                  subjects.find((item) => item.id === registration.mon_id)?.name,
+                  registration.so_luong,
+                ].join(' ')}
+                searchPlaceholder="Tìm theo lớp hoặc môn học..."
+                onBulkDelete={handleBulkDelete}
+                emptyText="Không tìm thấy đăng ký môn học"
+                pagination={{ pageSize: 8, showSizeChanger: false }}
+              />
+            )}
+          </Space>
         )}
       </Card>
 

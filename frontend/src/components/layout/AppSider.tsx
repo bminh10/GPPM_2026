@@ -2,7 +2,6 @@ import { Layout, Menu, Flex, Typography } from 'antd'
 import { BankOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { menuItems } from '../../routes/menuConfig'
-import { useAuth } from '../../store/authStore'
 
 type AppSiderProps = {
   collapsed: boolean
@@ -12,10 +11,6 @@ type AppSiderProps = {
 export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const { user } = useAuth()
-  const visibleMenuItems = menuItems.filter(
-    (item) => item?.key !== '/admin/data' || ['admin', 'superadmin'].includes(user?.role?.trim().toLowerCase() ?? ''),
-  )
 
   return (
     <Layout.Sider
@@ -38,7 +33,7 @@ export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
         theme="dark"
         mode="inline"
         selectedKeys={[pathname]}
-        items={visibleMenuItems}
+        items={menuItems}
         onClick={({ key }) => navigate(key)}
       />
     </Layout.Sider>
