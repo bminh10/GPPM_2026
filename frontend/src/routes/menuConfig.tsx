@@ -19,7 +19,7 @@ export const menuItems: AppMenuItem[] = [
   {
     key: ROUTE_PATHS.dashboard,
     icon: <DashboardOutlined />,
-    label: 'Dashboard',
+    label: 'Tổng quan',
   },
   {
     key: ROUTE_PATHS.map,
