@@ -14,8 +14,10 @@ from db.database import (
     Campus,
     DangKyMonHoc,
     HocKy,
+    Khoa,
     Lop,
     MonHoc,
+    Nganh,
     PhongHoc,
     ThoiKhoaBieu,
     get_db,
@@ -39,6 +41,8 @@ class AutomaticScheduleRequest(BaseModel):
     hoc_ky_id: int
     campus_id: int
     mode: Literal["missing", "all"] = "missing"
+    registration_ids: list[int] | None = None
+    khoa_ids: list[int] | None = None
     practice_registration_ids: list[int] = Field(default_factory=list)
     practice_percentage: int = Field(default=50, ge=1, le=99)
 
@@ -74,17 +78,17 @@ def _has_complete_schedule_coverage(
     if any(schedule.start_date < schedule.end_date for schedule in relevant_schedules):
         return True
 
-    expected_week_starts = set()
-    week_start = start_date - timedelta(days=start_date.weekday())
-    while week_start <= end_date:
-        expected_week_starts.add(week_start)
-        week_start += timedelta(days=7)
-    scheduled_week_starts = {
-        schedule.start_date - timedelta(days=schedule.start_date.weekday())
+    expected_week_indexes = set()
+    week_index = 0
+    while start_date + timedelta(days=7 * week_index) <= end_date:
+        expected_week_indexes.add(week_index)
+        week_index += 1
+    scheduled_week_indexes = {
+        (schedule.start_date - start_date).days // 7
         for schedule in relevant_schedules
         if start_date <= schedule.start_date <= end_date
     }
-    if not expected_week_starts.issubset(scheduled_week_starts):
+    if not expected_week_indexes.issubset(scheduled_week_indexes):
         return False
     if any(schedule.is_thuc_hanh for schedule in relevant_schedules):
         return (
@@ -144,14 +148,68 @@ def automatically_schedule_semester(
             detail="Học kỳ đã kết thúc, không còn thời gian để phân bổ lịch học.",
         )
 
-    registrations = (
+    semester_registrations = (
         db.query(DangKyMonHoc)
-        .filter(
-            DangKyMonHoc.hoc_ky_id == semester.id,
-        )
+        .filter(DangKyMonHoc.hoc_ky_id == semester.id)
         .order_by(DangKyMonHoc.id)
         .all()
     )
+    semester_registration_ids = {
+        registration.id for registration in semester_registrations
+    }
+    if data.registration_ids is not None and data.khoa_ids is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Chỉ truyền danh sách đăng ký hoặc danh sách khoa, không truyền đồng thời.",
+        )
+    if data.khoa_ids is not None:
+        selected_faculty_ids = set(data.khoa_ids)
+        if not selected_faculty_ids:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Vui lòng chọn ít nhất một khoa để phân bổ.",
+            )
+        existing_faculty_ids = {
+            faculty_id
+            for (faculty_id,) in db.query(Khoa.id)
+            .filter(Khoa.id.in_(selected_faculty_ids))
+            .all()
+        }
+        if existing_faculty_ids != selected_faculty_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Một hoặc nhiều khoa được chọn không tồn tại.",
+            )
+        registrations = (
+            db.query(DangKyMonHoc)
+            .join(Lop, DangKyMonHoc.lop_id == Lop.id)
+            .join(Nganh, Lop.nganh_id == Nganh.id)
+            .filter(
+                DangKyMonHoc.hoc_ky_id == semester.id,
+                Nganh.khoa_id.in_(selected_faculty_ids),
+            )
+            .order_by(DangKyMonHoc.id)
+            .all()
+        )
+    elif data.registration_ids is not None:
+        requested_registration_ids = set(data.registration_ids)
+        if not requested_registration_ids:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Vui lòng chọn ít nhất một đăng ký môn học để phân bổ.",
+            )
+        if requested_registration_ids - semester_registration_ids:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Danh sách đăng ký phải thuộc học kỳ đang chọn.",
+            )
+        registrations = [
+            registration
+            for registration in semester_registrations
+            if registration.id in requested_registration_ids
+        ]
+    else:
+        registrations = semester_registrations
     existing_target_schedules = (
         db.query(ThoiKhoaBieu)
         .filter(ThoiKhoaBieu.hoc_ky_id == semester.id)
@@ -200,10 +258,14 @@ def automatically_schedule_semester(
         ]
     else:
         pending_registrations = registrations
+        selected_registration_ids = {
+            registration.id for registration in pending_registrations
+        }
         schedules_to_replace = [
             schedule
             for schedule in existing_target_schedules
             if schedule.end_date >= allocation_start_date
+            and schedule.dang_ky_mon_hoc_id in selected_registration_ids
         ]
 
     if not pending_registrations:
@@ -212,6 +274,7 @@ def automatically_schedule_semester(
             "campus_id": campus.id,
             "campus_name": campus.name,
             "scheduled_count": 0,
+            "replaced_count": 0,
             "message": (
                 "Không có đăng ký môn học nào cần xếp lịch."
                 if data.mode == "missing"
@@ -285,7 +348,9 @@ def automatically_schedule_semester(
             schedule.dang_ky_mon_hoc_id,
             schedule,
         )
-    fixed_schedule_query = db.query(ThoiKhoaBieu)
+    fixed_schedule_query = db.query(ThoiKhoaBieu).filter(
+        ThoiKhoaBieu.hoc_ky_id == semester.id
+    )
     if replaced_schedule_ids:
         fixed_schedule_query = fixed_schedule_query.filter(
             ThoiKhoaBieu.id.notin_(replaced_schedule_ids)
@@ -348,14 +413,13 @@ def automatically_schedule_semester(
     objective_terms = []
     registrations_without_rooms: list[tuple[DangKyMonHoc, str]] = []
     registrations_without_rooms_ids: set[int] = set()
+    meeting_requirements: dict[int, tuple[DangKyMonHoc, date, bool]] = {}
     teacher_by_registration = {
         registration_id: (schedule.teacher_name or "").strip().casefold()
         for registration_id, schedule in preserved_schedule_by_registration.items()
     }
     week_dates: list[list[date]] = []
-    current_week_start = allocation_start_date - timedelta(
-        days=allocation_start_date.weekday()
-    )
+    current_week_start = allocation_start_date
     while current_week_start <= semester.end_date:
         dates_in_week = [
             current_week_start + timedelta(days=day_offset)
@@ -403,13 +467,21 @@ def automatically_schedule_semester(
             eligible_rooms_for_meeting = [
                 room
                 for room in eligible_rooms
-                if not is_practical or room.is_thuc_hanh
+                if room.is_thuc_hanh == is_practical
             ]
             if not eligible_rooms_for_meeting:
                 if is_practical:
                     reason = "thiếu phòng thực hành đủ sức chứa"
+                elif any(
+                    room.capacity is not None and room.capacity >= required_capacity
+                    for room in rooms
+                ):
+                    reason = (
+                        f"không có phòng thường đủ sức chứa tại cơ sở {campus.name}; "
+                        "phòng thực hành không được dùng cho buổi lý thuyết"
+                    )
                 elif rooms:
-                    reason = f"không có phòng tại cơ sở {campus.name} đủ sức chứa"
+                    reason = f"không có phòng thường tại cơ sở {campus.name} đủ sức chứa"
                 else:
                     reason = f"cơ sở {campus.name} chưa có phòng học"
                 if registration.id not in registrations_without_rooms_ids:
@@ -464,12 +536,19 @@ def automatically_schedule_semester(
                                 (slot.start_time, slot.end_time, registration.id, variable)
                             )
                         room_penalty = room.capacity - required_capacity
-                        if not is_practical and room.is_thuc_hanh:
-                            room_penalty += 1
                         objective_terms.append(room_penalty * 100 * variable)
 
             if choices:
-                model.add_exactly_one(choices)
+                requirement = model.new_bool_var(
+                    f"require_registration_{registration.id}_meeting_{meeting_index}"
+                )
+                model.add(sum(choices) == 1).only_enforce_if(requirement)
+                model.add_assumption(requirement)
+                meeting_requirements[requirement.index] = (
+                    registration,
+                    week_dates[week_index][0],
+                    is_practical,
+                )
 
     if registrations_without_rooms:
         raise HTTPException(
@@ -523,15 +602,64 @@ def automatically_schedule_semester(
     solver.parameters.random_seed = 42
     solver_status = solver.Solve(model)
     if solver_status == cp_model.INFEASIBLE:
+        conflicting_registrations: dict[
+            int, tuple[DangKyMonHoc, dict[bool, set[date]]]
+        ] = {}
+        for assumption_index in solver.sufficient_assumptions_for_infeasibility():
+            literal_index = (
+                assumption_index
+                if assumption_index >= 0
+                else -assumption_index - 1
+            )
+            requirement = meeting_requirements.get(literal_index)
+            if requirement is None:
+                continue
+            registration, week_start, is_practical = requirement
+            if registration.id not in conflicting_registrations:
+                conflicting_registrations[registration.id] = (
+                    registration,
+                    defaultdict(set),
+                )
+            _, meetings_by_type = conflicting_registrations[
+                registration.id
+            ]
+            meetings_by_type[is_practical].add(week_start)
+
+        diagnostic_lines = []
+        for registration, meetings_by_type in conflicting_registrations.values():
+            type_summary = ", ".join(
+                f"{'thực hành' if is_practical else 'lý thuyết'} "
+                f"{len(weeks)} buổi"
+                for is_practical, weeks in sorted(meetings_by_type.items())
+            )
+            diagnostic_lines.append(
+                f"- {registration_label(registration)} ({type_summary})"
+            )
+        total_conflicting_meetings = sum(
+            len(weeks)
+            for _, meetings_by_type in conflicting_registrations.values()
+            for weeks in meetings_by_type.values()
+        )
+        shown_lines = diagnostic_lines[:20]
+        if len(diagnostic_lines) > len(shown_lines):
+            shown_lines.append(
+                f"- Và {len(diagnostic_lines) - len(shown_lines)} đăng ký khác."
+            )
+        diagnostic = "\n".join(shown_lines)
+        if not diagnostic:
+            diagnostic = "\n".join(
+                f"- {registration_label(registration)}"
+                for registration in pending_registrations
+            )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"Không thể xếp lịch đầy đủ tại cơ sở {campus.name} do xung đột ca, "
-                "thiếu phòng khả dụng hoặc lịch cố định. Các đăng ký cần kiểm tra:\n"
-                + "\n".join(
-                    f"- {registration_label(registration)}"
-                    for registration in pending_registrations
-                )
+                f"Không thể xếp lịch đầy đủ tại cơ sở {campus.name} với ca, phòng và lịch "
+                "cố định hiện có. Nhóm xung đột gồm "
+                f"{len(conflicting_registrations)} đăng ký / {total_conflicting_meetings} buổi:\n"
+                + diagnostic
+                + "\nKiểm tra số phòng đủ sức chứa, phòng thực hành, ca học và các lịch cố định "
+                "đang chiếm phòng hoặc lớp."
                 + "\nChưa có lịch nào bị thay đổi."
             ),
         )
@@ -610,6 +738,7 @@ def automatically_schedule_semester(
         "campus_id": campus.id,
         "campus_name": campus.name,
         "scheduled_count": len(new_schedules),
+        "replaced_count": len(schedules_to_replace),
         "practice_percentage": data.practice_percentage,
         "objective_value": solver.ObjectiveValue(),
         "allocations": allocations,
