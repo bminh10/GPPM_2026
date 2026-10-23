@@ -5,19 +5,19 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.schedules.schedules import find_conflicts
-from db.database import CaHoc, HocKy, Lop, MonHoc, PhongHoc, get_db
+from db.database import CaHoc, DangKyMonHoc, HocKy, PhongHoc, get_db
 
 router = APIRouter(prefix="/optimization", tags=["Tối ưu"])
 
 
 class RoomAllocationRequest(BaseModel):
-    lop_id: int
-    mon_hoc_id: int
+    dang_ky_mon_hoc_id: int
     hoc_ky_id: int
     ca_hoc_id: int
     day_of_week: int = Field(ge=2, le=8)
     start_date: date
     end_date: date
+    is_thuc_hanh: bool = False
 
 
 @router.post("/room-allocation")
@@ -31,8 +31,7 @@ def suggest_room_allocation(
             detail="Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.",
         )
     references = (
-        (Lop, data.lop_id, "lớp"),
-        (MonHoc, data.mon_hoc_id, "môn học"),
+        (DangKyMonHoc, data.dang_ky_mon_hoc_id, "đăng ký môn học"),
         (HocKy, data.hoc_ky_id, "học kỳ"),
         (CaHoc, data.ca_hoc_id, "ca học"),
     )
@@ -43,13 +42,21 @@ def suggest_room_allocation(
                 detail=f"Không tìm thấy {label} (id={identifier}).",
             )
 
-    class_size = db.query(Lop.si_so).filter(Lop.id == data.lop_id).scalar() or 0
-    candidates = (
-        db.query(PhongHoc)
-        .filter(PhongHoc.capacity >= class_size)
-        .order_by(PhongHoc.capacity, PhongHoc.name)
-        .all()
+    registration = (
+        db.query(DangKyMonHoc)
+        .filter(DangKyMonHoc.id == data.dang_ky_mon_hoc_id)
+        .first()
     )
+    if registration is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy đăng ký môn học (id={data.dang_ky_mon_hoc_id}).",
+        )
+    class_size = registration.so_luong
+    candidate_query = db.query(PhongHoc).filter(PhongHoc.capacity >= class_size)
+    if data.is_thuc_hanh:
+        candidate_query = candidate_query.filter(PhongHoc.is_thuc_hanh.is_(True))
+    candidates = candidate_query.order_by(PhongHoc.capacity, PhongHoc.name).all()
     available_rooms = []
     for room in candidates:
         values = {
@@ -63,11 +70,13 @@ def suggest_room_allocation(
                     "name": room.name,
                     "building": room.building,
                     "capacity": room.capacity,
+                    "is_thuc_hanh": room.is_thuc_hanh,
                     "campus_id": room.campus_id,
                 }
             )
     return {
-        "class_id": data.lop_id,
+        "registration_id": registration.id,
+        "class_id": registration.lop_id,
         "required_capacity": class_size,
         "suggested_room": available_rooms[0] if available_rooms else None,
         "available_rooms": available_rooms,

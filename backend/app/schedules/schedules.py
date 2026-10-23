@@ -1,18 +1,24 @@
-from datetime import date, time
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from db.database import CaHoc, HocKy, Lop, MonHoc, PhongHoc, ThoiKhoaBieu, get_db
+from db.database import (
+    CaHoc,
+    DangKyMonHoc,
+    HocKy,
+    PhongHoc,
+    ThoiKhoaBieu,
+    get_db,
+)
 from utils.commit import commit_db
 
 router = APIRouter(prefix="/schedules", tags=["Thời khóa biểu"])
 
 
 class ScheduleData(BaseModel):
-    lop_id: int
-    mon_hoc_id: int
+    dang_ky_mon_hoc_id: int
     phong_hoc_id: int
     hoc_ky_id: int
     ca_hoc_id: int
@@ -20,11 +26,11 @@ class ScheduleData(BaseModel):
     start_date: date
     end_date: date
     teacher_name: str | None = None
+    is_thuc_hanh: bool = False
 
 
 class ScheduleUpdate(BaseModel):
-    lop_id: int | None = None
-    mon_hoc_id: int | None = None
+    dang_ky_mon_hoc_id: int | None = None
     phong_hoc_id: int | None = None
     hoc_ky_id: int | None = None
     ca_hoc_id: int | None = None
@@ -32,10 +38,12 @@ class ScheduleUpdate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     teacher_name: str | None = None
+    is_thuc_hanh: bool | None = None
 
 
 class ScheduleResponse(BaseModel):
     id: int
+    dang_ky_mon_hoc_id: int
     lop_id: int
     mon_hoc_id: int
     phong_hoc_id: int
@@ -45,6 +53,7 @@ class ScheduleResponse(BaseModel):
     start_date: date
     end_date: date
     teacher_name: str | None
+    is_thuc_hanh: bool
 
     model_config = {"from_attributes": True}
 
@@ -59,8 +68,7 @@ def _check_schedule_dates(start_date: date, end_date: date) -> None:
 
 def _validate_references(db: Session, values: dict) -> None:
     refs = (
-        ("lop_id", Lop, "lớp"),
-        ("mon_hoc_id", MonHoc, "môn học"),
+        ("dang_ky_mon_hoc_id", DangKyMonHoc, "đăng ký môn học"),
         ("phong_hoc_id", PhongHoc, "phòng học"),
         ("hoc_ky_id", HocKy, "học kỳ"),
         ("ca_hoc_id", CaHoc, "ca học"),
@@ -71,6 +79,12 @@ def _validate_references(db: Session, values: dict) -> None:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Không tìm thấy {label} (id={values[field]}).",
             )
+    room = db.query(PhongHoc).filter(PhongHoc.id == values["phong_hoc_id"]).first()
+    if values.get("is_thuc_hanh", False) and not room.is_thuc_hanh:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Lịch thực hành phải được xếp vào phòng được đánh dấu là phòng thực hành.",
+        )
 
 
 def find_conflicts(
@@ -79,6 +93,11 @@ def find_conflicts(
     exclude_id: int | None = None,
 ) -> list[dict]:
     slot = db.query(CaHoc).filter(CaHoc.id == values["ca_hoc_id"]).first()
+    registration = (
+        db.query(DangKyMonHoc)
+        .filter(DangKyMonHoc.id == values["dang_ky_mon_hoc_id"])
+        .first()
+    )
     candidates = (
         db.query(ThoiKhoaBieu)
         .filter(
@@ -104,7 +123,7 @@ def find_conflicts(
         conflict_types = []
         if existing.phong_hoc_id == values["phong_hoc_id"]:
             conflict_types.append("room")
-        if existing.lop_id == values["lop_id"]:
+        if registration is not None and existing.lop_id == registration.lop_id:
             conflict_types.append("class")
         if conflict_types:
             conflicts.append(
@@ -141,7 +160,7 @@ def get_schedules(
     if room_id is not None:
         query = query.filter(ThoiKhoaBieu.phong_hoc_id == room_id)
     if class_id is not None:
-        query = query.filter(ThoiKhoaBieu.lop_id == class_id)
+        query = query.join(DangKyMonHoc).filter(DangKyMonHoc.lop_id == class_id)
     if day_of_week is not None:
         query = query.filter(ThoiKhoaBieu.day_of_week == day_of_week)
     if on_date is not None:
@@ -183,8 +202,7 @@ def update_schedule(
     if schedule is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch học.")
     values = {
-        "lop_id": schedule.lop_id,
-        "mon_hoc_id": schedule.mon_hoc_id,
+        "dang_ky_mon_hoc_id": schedule.dang_ky_mon_hoc_id,
         "phong_hoc_id": schedule.phong_hoc_id,
         "hoc_ky_id": schedule.hoc_ky_id,
         "ca_hoc_id": schedule.ca_hoc_id,
@@ -192,11 +210,11 @@ def update_schedule(
         "start_date": schedule.start_date,
         "end_date": schedule.end_date,
         "teacher_name": schedule.teacher_name,
+        "is_thuc_hanh": schedule.is_thuc_hanh,
     }
     values.update(data.model_dump(exclude_unset=True))
     required_fields = {
-        "lop_id",
-        "mon_hoc_id",
+        "dang_ky_mon_hoc_id",
         "phong_hoc_id",
         "hoc_ky_id",
         "ca_hoc_id",

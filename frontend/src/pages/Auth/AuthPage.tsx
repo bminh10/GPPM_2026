@@ -74,7 +74,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
             onChange={(value) => navigate(value === 'sign-in' ? ROUTE_PATHS.signIn : ROUTE_PATHS.signUp)}
             options={[
               { label: 'Đăng nhập', value: 'sign-in' },
-              { label: 'Đăng ký', value: 'sign-up' },
+              // { label: 'Đăng ký', value: 'sign-up' },
             ]}
             style={{ marginBottom: 24 }}
           />
@@ -181,12 +181,12 @@ export default function AuthPage({ mode }: AuthPageProps) {
             </Form>
           )}
 
-          <Typography.Paragraph type="secondary" style={{ textAlign: 'center', marginTop: 24, marginBottom: 0 }}>
+          {/* <Typography.Paragraph type="secondary" style={{ textAlign: 'center', marginTop: 24, marginBottom: 0 }}>
             {isSignIn ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}
             <Typography.Link onClick={() => navigate(isSignIn ? ROUTE_PATHS.signUp : ROUTE_PATHS.signIn)}>
               {isSignIn ? 'Đăng ký ngay' : 'Đăng nhập'}
             </Typography.Link>
-          </Typography.Paragraph>
+          </Typography.Paragraph> */}
         </div>
       </div>
     </div>

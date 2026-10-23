@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from sqlalchemy import (
     Column,
     Integer,
+    Boolean,
     BigInteger,
     SmallInteger,
     String,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     CheckConstraint,
+    UniqueConstraint,
     create_engine,
     func,
 )
@@ -74,6 +76,7 @@ class PhongHoc(Base):
     name = Column(String, nullable=False)
     building = Column(String)
     capacity = Column(Integer, default=0)
+    is_thuc_hanh = Column(Boolean, nullable=False, default=False)
     campus_id = Column(Integer, ForeignKey("campus.id"), nullable=False)
 
     campus = relationship("Campus", back_populates="phong_hocs")
@@ -111,7 +114,7 @@ class Lop(Base):
     __table_args__ = (CheckConstraint("si_so >= 0", name="lop_si_so_check"),)
 
     nganh = relationship("Nganh", back_populates="lops")
-    thoi_khoa_bieus = relationship("ThoiKhoaBieu", back_populates="lop")
+    dang_ky_mon_hocs = relationship("DangKyMonHoc", back_populates="lop")
 
 
 class MonHoc(Base):
@@ -124,7 +127,25 @@ class MonHoc(Base):
 
     __table_args__ = (CheckConstraint("credits > 0", name="mon_hoc_credits_check"),)
 
-    thoi_khoa_bieus = relationship("ThoiKhoaBieu", back_populates="mon_hoc")
+    dang_ky_mon_hocs = relationship("DangKyMonHoc", back_populates="mon_hoc")
+
+
+class DangKyMonHoc(Base):
+    __tablename__ = "dang_ky_mon_hoc"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lop_id = Column(Integer, ForeignKey("lop.id"), nullable=False)
+    mon_id = Column(Integer, ForeignKey("mon_hoc.id"), nullable=False)
+    so_luong = Column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        CheckConstraint("so_luong >= 0", name="dang_ky_mon_hoc_so_luong_check"),
+        UniqueConstraint("lop_id", "mon_id", name="dang_ky_mon_hoc_lop_mon_unique"),
+    )
+
+    lop = relationship("Lop", back_populates="dang_ky_mon_hocs")
+    mon_hoc = relationship("MonHoc", back_populates="dang_ky_mon_hocs")
+    thoi_khoa_bieus = relationship("ThoiKhoaBieu", back_populates="dang_ky_mon_hoc")
 
 
 class HocKy(Base):
@@ -153,8 +174,11 @@ class ThoiKhoaBieu(Base):
     __tablename__ = "thoi_khoa_bieu"
 
     id = Column(Integer, primary_key=True, index=True)
-    lop_id = Column(Integer, ForeignKey("lop.id"), nullable=False)
-    mon_hoc_id = Column(Integer, ForeignKey("mon_hoc.id"), nullable=False)
+    dang_ky_mon_hoc_id = Column(
+        Integer,
+        ForeignKey("dang_ky_mon_hoc.id"),
+        nullable=False,
+    )
     phong_hoc_id = Column(Integer, ForeignKey("phong_hoc.id"), nullable=False)
     hoc_ky_id = Column(Integer, ForeignKey("hoc_ky.id"), nullable=False)
     ca_hoc_id = Column(Integer, ForeignKey("ca_hoc.id"), nullable=False)
@@ -162,6 +186,7 @@ class ThoiKhoaBieu(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     teacher_name = Column(String)
+    is_thuc_hanh = Column(Boolean, nullable=False, default=False)
 
     __table_args__ = (
         CheckConstraint(
@@ -170,11 +195,21 @@ class ThoiKhoaBieu(Base):
         ),
     )
 
-    lop = relationship("Lop", back_populates="thoi_khoa_bieus")
-    mon_hoc = relationship("MonHoc", back_populates="thoi_khoa_bieus")
+    dang_ky_mon_hoc = relationship(
+        "DangKyMonHoc",
+        back_populates="thoi_khoa_bieus",
+    )
     phong_hoc = relationship("PhongHoc", back_populates="thoi_khoa_bieus")
     hoc_ky = relationship("HocKy", back_populates="thoi_khoa_bieus")
     ca_hoc = relationship("CaHoc", back_populates="thoi_khoa_bieus")
+
+    @property
+    def lop_id(self) -> int:
+        return self.dang_ky_mon_hoc.lop_id
+
+    @property
+    def mon_hoc_id(self) -> int:
+        return self.dang_ky_mon_hoc.mon_id
 
 
 class AuditLog(Base):
