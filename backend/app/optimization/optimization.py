@@ -48,6 +48,21 @@ def _has_weekday_between(start_date: date, end_date: date, day_of_week: int) -> 
     return first_day <= end_date
 
 
+def _practice_week_indexes(week_count: int, percentage: int) -> set[int]:
+    if week_count <= 0:
+        return set()
+    if week_count == 1:
+        return {0}
+    practice_count = max(
+        1,
+        min(week_count - 1, (week_count * percentage + 50) // 100),
+    )
+    return {
+        (practice_index * week_count) // practice_count
+        for practice_index in range(practice_count)
+    }
+
+
 def _has_complete_schedule_coverage(
     schedules: list[ThoiKhoaBieu],
     start_date: date,
@@ -332,6 +347,7 @@ def automatically_schedule_semester(
     ] = defaultdict(list)
     objective_terms = []
     registrations_without_rooms: list[tuple[DangKyMonHoc, str]] = []
+    registrations_without_rooms_ids: set[int] = set()
     teacher_by_registration = {
         registration_id: (schedule.teacher_name or "").strip().casefold()
         for registration_id, schedule in preserved_schedule_by_registration.items()
@@ -362,18 +378,15 @@ def automatically_schedule_semester(
             if room.capacity is not None
             and room.capacity >= required_capacity
         ]
-        registration_week_types: list[bool] = [False] * len(week_dates)
-        if registration.id in practice_ids:
-            if len(week_dates) == 1:
-                registration_week_types[0] = True
-            else:
-                practice_count = (
-                    len(week_dates) * data.practice_percentage + 50
-                ) // 100
-                practice_count = max(1, min(len(week_dates) - 1, practice_count))
-                for practice_index in range(practice_count):
-                    week_index = (practice_index * len(week_dates)) // practice_count
-                    registration_week_types[week_index] = True
+        practice_week_indexes = (
+            _practice_week_indexes(len(week_dates), data.practice_percentage)
+            if registration.id in practice_ids
+            else set()
+        )
+        registration_week_types = [
+            week_index in practice_week_indexes
+            for week_index in range(len(week_dates))
+        ]
 
         meeting_specs = [
             (week_index, is_practical)
@@ -399,7 +412,9 @@ def automatically_schedule_semester(
                     reason = f"không có phòng tại cơ sở {campus.name} đủ sức chứa"
                 else:
                     reason = f"cơ sở {campus.name} chưa có phòng học"
-                registrations_without_rooms.append((registration, reason))
+                if registration.id not in registrations_without_rooms_ids:
+                    registrations_without_rooms.append((registration, reason))
+                    registrations_without_rooms_ids.add(registration.id)
                 continue
 
             choices = []
