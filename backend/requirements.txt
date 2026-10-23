@@ -7,3 +7,4 @@ pydantic>=2.0
 bcrypt>=4.0
 PyJWT>=2.8
 cryptography>=42.0
+ortools>=9.12,<10

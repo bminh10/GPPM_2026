@@ -4,11 +4,14 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Empty,
   Flex,
   Form,
   Input,
+  InputNumber,
   Modal,
+  Radio,
   Space,
   Spin,
   Switch,
@@ -17,7 +20,13 @@ import {
   Typography,
   message,
 } from 'antd'
-import { EditOutlined, LeftOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
+import {
+  EditOutlined,
+  LeftOutlined,
+  ReloadOutlined,
+  RightOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons'
 import axios from 'axios'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
@@ -68,6 +77,7 @@ type ScheduleEditValues = {
   teacher_name: string
   is_thuc_hanh: boolean
 }
+type AutomaticScheduleMode = 'missing' | 'all'
 
 const DAY_NAMES = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']
 
@@ -87,6 +97,32 @@ function startOfWeek(value: string) {
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' })
     .format(new Date(`${value}T00:00:00`))
+}
+
+function hasScheduleCoverage(schedules: Schedule[], startDate: string, endDate: string) {
+  const relevantSchedules = schedules.filter((schedule) => schedule.end_date >= startDate)
+  if (relevantSchedules.some((schedule) => schedule.start_date < schedule.end_date)) return true
+
+  const expectedWeeks = new Set<string>()
+  const weekStart = startOfWeek(startDate)
+  const finalDate = new Date(`${endDate}T00:00:00`)
+  while (weekStart <= finalDate) {
+    expectedWeeks.add(toDateString(weekStart))
+    weekStart.setDate(weekStart.getDate() + 7)
+  }
+  const scheduledWeeks = new Set(
+    relevantSchedules
+      .filter((schedule) => schedule.start_date >= startDate && schedule.start_date <= endDate)
+      .map((schedule) => toDateString(startOfWeek(schedule.start_date))),
+  )
+  if ([...expectedWeeks].some((week) => !scheduledWeeks.has(week))) return false
+  if (relevantSchedules.some((schedule) => schedule.is_thuc_hanh)) {
+    return (
+      relevantSchedules.some((schedule) => schedule.is_thuc_hanh) &&
+      relevantSchedules.some((schedule) => !schedule.is_thuc_hanh)
+    )
+  }
+  return true
 }
 
 function getWeekDays(weekStart: Date) {
@@ -129,6 +165,15 @@ export default function TimetablePage() {
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null)
   const [savingSchedule, setSavingSchedule] = useState(false)
+  const [automaticScheduleOpen, setAutomaticScheduleOpen] = useState(false)
+  const [automaticScheduleLoading, setAutomaticScheduleLoading] = useState(false)
+  const [automaticScheduleMode, setAutomaticScheduleMode] =
+    useState<AutomaticScheduleMode>('missing')
+  const [automaticScheduleCampusId, setAutomaticScheduleCampusId] = useState<number>()
+  const [automaticScheduleSchedules, setAutomaticScheduleSchedules] = useState<Schedule[]>([])
+  const [practiceRegistrationIds, setPracticeRegistrationIds] = useState<number[]>([])
+  const [practicePercentage, setPracticePercentage] = useState(50)
+  const [automaticScheduleError, setAutomaticScheduleError] = useState<string | null>(null)
   const [editForm] = Form.useForm<ScheduleEditValues>()
   const [messageApi, contextHolder] = message.useMessage()
 
@@ -246,6 +291,115 @@ export default function TimetablePage() {
   const availableMajors = majors.filter(
     (major) => facultyId === undefined || major.khoa_id === facultyId,
   )
+  const semesterRegistrations = registrations.filter(
+    (registration) => registration.hoc_ky_id === semesterId,
+  )
+  const allocationStartDate = selectedSemester
+    ? selectedSemester.start_date > toDateString(new Date())
+      ? selectedSemester.start_date
+      : toDateString(new Date())
+    : toDateString(new Date())
+  const scheduledRegistrationIds = new Set(
+    semesterRegistrations
+      .filter((registration) => {
+        if (automaticScheduleCampusId === undefined) return false
+        const registrationSchedules = automaticScheduleSchedules.filter(
+          (schedule) =>
+            schedule.dang_ky_mon_hoc_id === registration.id &&
+            rooms.find((room) => room.id === schedule.phong_hoc_id)?.campus_id ===
+              automaticScheduleCampusId,
+        )
+        return hasScheduleCoverage(
+          registrationSchedules,
+          allocationStartDate,
+          selectedSemester?.end_date ?? allocationStartDate,
+        )
+      })
+      .map((registration) => registration.id),
+  )
+  const automaticScheduleRegistrations =
+    automaticScheduleMode === 'all'
+      ? semesterRegistrations
+      : semesterRegistrations.filter(
+        (registration) => !scheduledRegistrationIds.has(registration.id),
+      )
+  const selectedCampusRooms = rooms.filter(
+    (room) => room.campus_id === automaticScheduleCampusId,
+  )
+  const remainingWeekCount = selectedSemester
+    ? Math.floor(
+        (new Date(`${selectedSemester.end_date}T00:00:00`).getTime() -
+          new Date(`${allocationStartDate}T00:00:00`).getTime()) /
+          (7 * 24 * 60 * 60 * 1000),
+      ) + 1
+    : 0
+  const estimatedPracticeCount =
+    remainingWeekCount <= 0
+      ? 0
+      : remainingWeekCount === 1
+      ? 1
+      : Math.max(
+          1,
+          Math.min(
+            remainingWeekCount - 1,
+            Math.round((remainingWeekCount * practicePercentage) / 100),
+          ),
+        )
+
+  const openAutomaticSchedule = async () => {
+    if (semesterId === undefined) {
+      messageApi.error('Vui lòng chọn học kỳ trước khi tự động xếp lịch.')
+      return
+    }
+    setAutomaticScheduleLoading(true)
+    try {
+      const { data } = await apiClient.get<Schedule[]>('/schedules', {
+        params: { semester_id: semesterId },
+      })
+      setAutomaticScheduleSchedules(data)
+      setAutomaticScheduleMode('missing')
+      setAutomaticScheduleCampusId(undefined)
+      setAutomaticScheduleError(null)
+      setPracticeRegistrationIds(
+        data
+          .filter((schedule) => schedule.is_thuc_hanh)
+          .map((schedule) => schedule.dang_ky_mon_hoc_id),
+      )
+      setAutomaticScheduleOpen(true)
+    } catch (error: unknown) {
+      messageApi.error(getErrorMessage(error))
+    } finally {
+      setAutomaticScheduleLoading(false)
+    }
+  }
+
+  const runAutomaticSchedule = async () => {
+    if (semesterId === undefined || automaticScheduleCampusId === undefined) return
+    setAutomaticScheduleLoading(true)
+    setAutomaticScheduleError(null)
+    try {
+      const { data } = await apiClient.post<{ scheduled_count: number }>(
+        '/optimization/schedule',
+        {
+          hoc_ky_id: semesterId,
+          campus_id: automaticScheduleCampusId,
+          mode: automaticScheduleMode,
+          practice_percentage: practicePercentage,
+          practice_registration_ids: practiceRegistrationIds.filter((id) =>
+            automaticScheduleRegistrations.some((registration) => registration.id === id),
+          ),
+        },
+      )
+      messageApi.success(`Đã tự động xếp ${data.scheduled_count} lịch học.`)
+      setAutomaticScheduleOpen(false)
+      setReloadKey((key) => key + 1)
+      setReferenceReloadKey((key) => key + 1)
+    } catch (error: unknown) {
+      setAutomaticScheduleError(getErrorMessage(error))
+    } finally {
+      setAutomaticScheduleLoading(false)
+    }
+  }
 
   const openScheduleEditor = (schedule: Schedule) => {
     setEditingSchedule(schedule)
@@ -357,18 +511,29 @@ export default function TimetablePage() {
             Xem lịch học theo tuần, học kỳ, khoa, ngành và phòng.
           </Typography.Text>
         </div>
-        <Button
-          icon={<ReloadOutlined />}
-          onClick={() => {
-            setReloadKey((key) => key + 1)
-            setReferenceReloadKey((key) => key + 1)
-            setReferencesLoading(true)
-            setReferencesError(null)
-          }}
-          loading={scheduleLoading || referencesLoading}
-        >
-          Tải lại
-        </Button>
+        <Space wrap>
+          <Button
+            type="primary"
+            icon={<ThunderboltOutlined />}
+            onClick={() => void openAutomaticSchedule()}
+            loading={automaticScheduleLoading}
+            disabled={referencesLoading || semesterId === undefined}
+          >
+            Tự động xếp lịch
+          </Button>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              setReloadKey((key) => key + 1)
+              setReferenceReloadKey((key) => key + 1)
+              setReferencesLoading(true)
+              setReferencesError(null)
+            }}
+            loading={scheduleLoading || referencesLoading}
+          >
+            Tải lại
+          </Button>
+        </Space>
       </Flex>
 
       {referencesError && <Alert type="error" showIcon message={referencesError} />}
@@ -537,6 +702,168 @@ export default function TimetablePage() {
         )}
       </Card>
       <Modal
+        title={`Tự động xếp lịch${selectedSemester ? ` · ${selectedSemester.name}` : ''}`}
+        open={automaticScheduleOpen}
+        onCancel={() => {
+          setAutomaticScheduleOpen(false)
+          setAutomaticScheduleError(null)
+        }}
+        onOk={() => void runAutomaticSchedule()}
+        okText="Bắt đầu xếp lịch"
+        cancelText="Hủy"
+        confirmLoading={automaticScheduleLoading}
+        okButtonProps={{
+          disabled:
+            automaticScheduleRegistrations.length === 0 ||
+            automaticScheduleCampusId === undefined,
+        }}
+        width={640}
+        destroyOnHidden
+      >
+        <Space direction="vertical" size="middle" style={{ display: 'flex' }}>
+          {automaticScheduleError && (
+            <Alert
+              type="error"
+              showIcon
+              message="Không thể hoàn thành phân bổ"
+              description={
+                <div style={{ whiteSpace: 'pre-line' }}>{automaticScheduleError}</div>
+              }
+            />
+          )}
+          <div>
+            <Typography.Text strong>Cơ sở đào tạo</Typography.Text>
+            <SearchFilterSelect
+              aria-label="Chọn cơ sở để tự động phân bổ phòng"
+              value={automaticScheduleCampusId}
+              options={campuses.map((campus) => ({
+                value: campus.id,
+                label: campus.name,
+              }))}
+              placeholder="Chọn cơ sở"
+              style={{ width: '100%', marginTop: 6 }}
+              onChange={(value: number | undefined) => {
+                setAutomaticScheduleCampusId(value)
+                setAutomaticScheduleError(null)
+              }}
+            />
+            {automaticScheduleCampusId !== undefined && (
+              <Typography.Text type="secondary" style={{ display: 'block', marginTop: 6 }}>
+                Cơ sở này có {selectedCampusRooms.length} phòng; solver chỉ sử dụng các phòng
+                thuộc cơ sở đã chọn.
+              </Typography.Text>
+            )}
+          </div>
+          <Typography.Text>
+            Mỗi đăng ký được xếp một buổi mỗi tuần còn lại, lưu theo ngày cụ thể. Với môn có
+            thực hành, hệ thống chia buổi theo tỷ lệ bên dưới và luôn đảm bảo có cả lý thuyết
+            lẫn thực hành; nếu chỉ còn một tuần, hệ thống xếp một buổi mỗi loại.
+          </Typography.Text>
+          <Radio.Group
+            value={automaticScheduleMode}
+            onChange={(event) => setAutomaticScheduleMode(event.target.value)}
+            optionType="button"
+            buttonStyle="solid"
+            options={[
+              { value: 'missing', label: 'Chỉ xếp môn chưa có lịch' },
+              { value: 'all', label: 'Phân bổ lại toàn bộ học kỳ' },
+            ]}
+          />
+          {automaticScheduleMode === 'all' && (
+            <Alert
+              type="warning"
+              showIcon
+              message="Các lịch từ hôm nay trở đi trong học kỳ này sẽ được phân bổ lại."
+              description="Lịch đã kết thúc được giữ nguyên. Nếu không tìm được phương án xếp đầy đủ, lịch hiện tại sẽ không bị thay đổi."
+            />
+          )}
+          <div>
+            <Flex align="center" justify="space-between" gap={12} wrap="wrap">
+              <Typography.Text strong>Tỷ lệ buổi thực hành</Typography.Text>
+              <Space>
+                <InputNumber
+                  aria-label="Tỷ lệ buổi thực hành"
+                  min={1}
+                  max={99}
+                  value={practicePercentage}
+                  addonAfter="%"
+                  onChange={(value) => {
+                    if (value !== null) setPracticePercentage(value)
+                  }}
+                  style={{ width: 120 }}
+                />
+              </Space>
+            </Flex>
+            <Typography.Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
+              Mặc định 50%. Với {remainingWeekCount} tuần còn lại, ước tính{' '}
+              {remainingWeekCount === 1
+                ? 1
+                : Math.max(0, remainingWeekCount - estimatedPracticeCount)}{' '}
+              buổi lý thuyết và {estimatedPracticeCount} buổi thực hành cho mỗi môn được chọn.
+            </Typography.Text>
+          </div>
+          <div>
+            <Typography.Text strong>Đánh dấu các đăng ký có buổi thực hành</Typography.Text>
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+              Các buổi thực hành dùng phòng thực hành; các buổi lý thuyết ưu tiên phòng thường.
+              Khi phân bổ lại, lựa chọn mặc định lấy từ lịch hiện có.
+            </Typography.Text>
+            {automaticScheduleRegistrations.length === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="Không có đăng ký môn học cần xếp lịch"
+              />
+            ) : (
+              <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid #f0f0f0', borderRadius: 8, padding: 12 }}>
+                <Space direction="vertical" size={10} style={{ display: 'flex' }}>
+                  {automaticScheduleRegistrations.map((registration) => {
+                    const schoolClass = classes.find((item) => item.id === registration.lop_id)
+                    const subject = subjects.find((item) => item.id === registration.mon_id)
+                    const isPractice = practiceRegistrationIds.includes(registration.id)
+                    const suitableRooms = selectedCampusRooms.filter(
+                      (room) =>
+                        room.capacity >= registration.so_luong &&
+                        (!isPractice || room.is_thuc_hanh),
+                    )
+                    const hasCapacityRoom = selectedCampusRooms.some(
+                      (room) => room.capacity >= registration.so_luong,
+                    )
+                    return (
+                      <div key={registration.id}>
+                        <Checkbox
+                          checked={isPractice}
+                          onChange={(event) => {
+                            setPracticeRegistrationIds((current) =>
+                              event.target.checked
+                                ? [...new Set([...current, registration.id])]
+                                : current.filter((id) => id !== registration.id),
+                            )
+                            setAutomaticScheduleError(null)
+                          }}
+                        >
+                          {schoolClass?.name ?? `Lớp ${registration.lop_id}`}
+                          {' · '}
+                          {subject?.name ?? `Môn ${registration.mon_id}`}
+                          {' · '}
+                          {registration.so_luong} sinh viên
+                        </Checkbox>
+                        {automaticScheduleCampusId !== undefined && suitableRooms.length === 0 && (
+                          <Typography.Text type="danger" style={{ display: 'block', marginLeft: 24 }}>
+                            {isPractice && hasCapacityRoom
+                              ? 'Thiếu phòng thực hành đủ sức chứa tại cơ sở này.'
+                              : `Không có phòng đủ ${registration.so_luong} chỗ tại cơ sở này.`}
+                          </Typography.Text>
+                        )}
+                      </div>
+                    )
+                  })}
+                </Space>
+              </div>
+            )}
+          </div>
+        </Space>
+      </Modal>
+      <Modal
         title="Chỉnh sửa lịch học"
         open={editingSchedule !== null}
         onCancel={() => setEditingSchedule(null)}
@@ -553,6 +880,7 @@ export default function TimetablePage() {
             rules={[{ required: true, message: 'Vui lòng chọn đăng ký môn học' }]}
           >
             <SearchFilterSelect
+              disabled
               options={registrations.map((registration) => {
                 const schoolClass = classes.find((item) => item.id === registration.lop_id)
                 const subject = subjects.find((item) => item.id === registration.mon_id)
@@ -571,6 +899,7 @@ export default function TimetablePage() {
               style={{ flex: '1 1 180px' }}
             >
               <SearchFilterSelect
+                disabled
                 options={semesters.map((semester) => ({
                   value: semester.id,
                   label: semester.name,
