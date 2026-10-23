@@ -9,7 +9,6 @@ import {
   Flex,
   Form,
   Input,
-  InputNumber,
   Modal,
   Radio,
   Select,
@@ -55,6 +54,10 @@ type RegistrationOption = {
   hoc_ky_id: number | null
 }
 type NamedOption = { id: number; name: string }
+type SubjectOption = NamedOption & {
+  code: string
+  is_thuc_hanh: boolean
+}
 type ClassOption = NamedOption & { si_so: number; nganh_id: number }
 type FacultyOption = NamedOption
 type MajorOption = NamedOption & { khoa_id: number | null }
@@ -101,33 +104,21 @@ function formatDate(value: string) {
     .format(new Date(`${value}T00:00:00`))
 }
 
-function hasScheduleCoverage(schedules: Schedule[], startDate: string, endDate: string) {
-  const relevantSchedules = schedules.filter((schedule) => schedule.end_date >= startDate)
-  if (relevantSchedules.some((schedule) => schedule.start_date < schedule.end_date)) return true
-
-  const start = new Date(`${startDate}T00:00:00`)
-  const final = new Date(`${endDate}T00:00:00`)
-  const expectedWeekCount = Math.floor(
-    (final.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000),
-  ) + 1
-  const scheduledWeekIndexes = new Set(
-    relevantSchedules
-      .filter((schedule) => schedule.start_date >= startDate && schedule.start_date <= endDate)
-      .map((schedule) => {
-        const scheduledDate = new Date(`${schedule.start_date}T00:00:00`)
-        return Math.floor(
-          (scheduledDate.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000),
-        )
-      }),
+function hasScheduleCoverage(
+  schedules: Schedule[],
+  startDate: string,
+  endDate: string,
+  hasPractice: boolean,
+) {
+  const requiredTypes = hasPractice ? [false, true] : [false]
+  return requiredTypes.every((isPractice) =>
+    schedules.some(
+      (schedule) =>
+        schedule.is_thuc_hanh === isPractice &&
+        schedule.start_date <= startDate &&
+        schedule.end_date >= endDate,
+    ),
   )
-  if (scheduledWeekIndexes.size < expectedWeekCount) return false
-  if (relevantSchedules.some((schedule) => schedule.is_thuc_hanh)) {
-    return (
-      relevantSchedules.some((schedule) => schedule.is_thuc_hanh) &&
-      relevantSchedules.some((schedule) => !schedule.is_thuc_hanh)
-    )
-  }
-  return true
 }
 
 function getWeekDays(weekStart: Date) {
@@ -149,7 +140,7 @@ export default function TimetablePage() {
   const [classes, setClasses] = useState<ClassOption[]>([])
   const [faculties, setFaculties] = useState<FacultyOption[]>([])
   const [majors, setMajors] = useState<MajorOption[]>([])
-  const [subjects, setSubjects] = useState<NamedOption[]>([])
+  const [subjects, setSubjects] = useState<SubjectOption[]>([])
   const [rooms, setRooms] = useState<RoomOption[]>([])
   const [campuses, setCampuses] = useState<CampusOption[]>([])
   const [semesters, setSemesters] = useState<SemesterOption[]>([])
@@ -182,10 +173,15 @@ export default function TimetablePage() {
   const [confirmScheduleReplacement, setConfirmScheduleReplacement] = useState(false)
   const [automaticScheduleCampusId, setAutomaticScheduleCampusId] = useState<number>()
   const [automaticScheduleSchedules, setAutomaticScheduleSchedules] = useState<Schedule[]>([])
-  const [practiceRegistrationIds, setPracticeRegistrationIds] = useState<number[]>([])
-  const [practicePercentage, setPracticePercentage] = useState(50)
   const [automaticScheduleError, setAutomaticScheduleError] = useState<string | null>(null)
   const [editForm] = Form.useForm<ScheduleEditValues>()
+  const editingRegistrationId = Form.useWatch('dang_ky_mon_hoc_id', editForm)
+  const editingIsPractice = Form.useWatch('is_thuc_hanh', editForm)
+  const editingSubjectHasPractice = subjects.find(
+    (subject) =>
+      subject.id ===
+      registrations.find((registration) => registration.id === editingRegistrationId)?.mon_id,
+  )?.is_thuc_hanh
   const [messageApi, contextHolder] = message.useMessage()
 
   useEffect(() => {
@@ -193,7 +189,7 @@ export default function TimetablePage() {
     Promise.all([
       apiClient.get<ClassOption[]>('/classes'),
       apiClient.get<RegistrationOption[]>('/course-registrations'),
-      apiClient.get<NamedOption[]>('/subjects'),
+      apiClient.get<SubjectOption[]>('/subjects'),
       apiClient.get<RoomOption[]>('/rooms'),
       apiClient.get<CampusOption[]>('/campus/all'),
       apiClient.get<SemesterOption[]>('/semesters'),
@@ -331,10 +327,12 @@ export default function TimetablePage() {
             rooms.find((room) => room.id === schedule.phong_hoc_id)?.campus_id ===
               automaticScheduleCampusId,
         )
+        const subject = subjects.find((item) => item.id === registration.mon_id)
         return hasScheduleCoverage(
           registrationSchedules,
           allocationStartDate,
           selectedSemester?.end_date ?? allocationStartDate,
+          subject?.is_thuc_hanh ?? false,
         )
       })
       .map((registration) => registration.id),
@@ -351,26 +349,6 @@ export default function TimetablePage() {
   const selectedCampusRooms = rooms.filter(
     (room) => room.campus_id === automaticScheduleCampusId,
   )
-  const remainingWeekCount = selectedSemester
-    ? Math.floor(
-        (new Date(`${selectedSemester.end_date}T00:00:00`).getTime() -
-          new Date(`${allocationStartDate}T00:00:00`).getTime()) /
-          (7 * 24 * 60 * 60 * 1000),
-      ) + 1
-    : 0
-  const estimatedPracticeCount =
-    remainingWeekCount <= 0
-      ? 0
-      : remainingWeekCount === 1
-      ? 1
-      : Math.max(
-          1,
-          Math.min(
-            remainingWeekCount - 1,
-            Math.round((remainingWeekCount * practicePercentage) / 100),
-          ),
-        )
-
   const openAutomaticSchedule = async () => {
     if (semesterId === undefined) {
       messageApi.error('Vui lòng chọn học kỳ trước khi tự động xếp lịch.')
@@ -389,11 +367,6 @@ export default function TimetablePage() {
       setConfirmScheduleReplacement(false)
       setAutomaticScheduleCampusId(undefined)
       setAutomaticScheduleError(null)
-      setPracticeRegistrationIds(
-        data
-          .filter((schedule) => schedule.is_thuc_hanh)
-          .map((schedule) => schedule.dang_ky_mon_hoc_id),
-      )
       setAutomaticScheduleOpen(true)
     } catch (error: unknown) {
       messageApi.error(getErrorMessage(error))
@@ -419,14 +392,10 @@ export default function TimetablePage() {
           ...(automaticScheduleScope === 'faculty'
             ? { khoa_ids: automaticScheduleFacultyIds }
             : { registration_ids: allScopedRegistrationIds }),
-          practice_percentage: practicePercentage,
-          practice_registration_ids: practiceRegistrationIds.filter((id) =>
-            automaticScheduleRegistrations.some((registration) => registration.id === id),
-          ),
         },
       )
       messageApi.success(
-        `Đã xếp ${data.scheduled_count} buổi học, thay thế ${data.replaced_count} lịch cũ.`,
+        `Đã tạo ${data.scheduled_count} lịch cố định hằng tuần, thay thế ${data.replaced_count} lịch cũ.`,
       )
       setAutomaticScheduleOpen(false)
       setReloadKey((key) => key + 1)
@@ -862,10 +831,13 @@ export default function TimetablePage() {
             )}
           </div>
           <Typography.Text>
-            Mỗi đăng ký được xếp một buổi trong mỗi chu kỳ 7 ngày tính từ ngày bắt đầu phân bổ,
-            lưu theo ngày cụ thể. Với môn có thực hành, hệ thống chia buổi theo tỷ lệ bên dưới
-            và luôn đảm bảo có cả lý thuyết lẫn thực hành; nếu chỉ còn một chu kỳ, hệ thống xếp
-            một buổi mỗi loại.
+            Mỗi đăng ký được xếp lịch cố định hằng tuần trong học kỳ. Môn được cấu hình là thực
+            hành sẽ có một lịch lý thuyết và một lịch thực hành riêng; lịch thực hành dùng phòng
+            thực hành, còn lịch lý thuyết dùng phòng thường.
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            Nếu đăng ký trong phạm vi chọn đang có lịch tương lai ở cơ sở khác, lịch đó sẽ được
+            thay bằng lịch tại cơ sở đã chọn.
           </Typography.Text>
           <Radio.Group
             value={automaticScheduleMode}
@@ -898,35 +870,10 @@ export default function TimetablePage() {
             </>
           )}
           <div>
-            <Flex align="center" justify="space-between" gap={12} wrap="wrap">
-              <Typography.Text strong>Tỷ lệ buổi thực hành</Typography.Text>
-              <Space>
-                <InputNumber
-                  aria-label="Tỷ lệ buổi thực hành"
-                  min={1}
-                  max={99}
-                  value={practicePercentage}
-                  addonAfter="%"
-                  onChange={(value) => {
-                    if (value !== null) setPracticePercentage(value)
-                  }}
-                  style={{ width: 120 }}
-                />
-              </Space>
-            </Flex>
-            <Typography.Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
-              Mặc định 50%. Với {remainingWeekCount} tuần còn lại, ước tính{' '}
-              {remainingWeekCount === 1
-                ? 1
-                : Math.max(0, remainingWeekCount - estimatedPracticeCount)}{' '}
-              buổi lý thuyết và {estimatedPracticeCount} buổi thực hành cho mỗi môn được chọn.
-            </Typography.Text>
-          </div>
-          <div>
-            <Typography.Text strong>Đánh dấu các đăng ký có buổi thực hành</Typography.Text>
+            <Typography.Text strong>Phân loại lịch theo môn học</Typography.Text>
             <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-              Các buổi thực hành dùng phòng thực hành; các buổi lý thuyết ưu tiên phòng thường.
-              Khi phân bổ lại, lựa chọn mặc định lấy từ lịch hiện có.
+              Phân loại thực hành lấy từ danh sách mã môn cấu hình ở backend, không chọn thủ công
+              tại đây.
             </Typography.Text>
             {automaticScheduleRegistrations.length === 0 ? (
               <Empty
@@ -939,42 +886,39 @@ export default function TimetablePage() {
                   {automaticScheduleRegistrations.map((registration) => {
                     const schoolClass = classes.find((item) => item.id === registration.lop_id)
                     const subject = subjects.find((item) => item.id === registration.mon_id)
-                    const isPractice = practiceRegistrationIds.includes(registration.id)
-                    const suitableRooms = selectedCampusRooms.filter(
-                      (room) =>
-                        room.capacity >= registration.so_luong &&
-                        (!isPractice || room.is_thuc_hanh),
-                    )
-                    const hasAnyCapacityRoom = selectedCampusRooms.some(
-                      (room) => room.capacity >= registration.so_luong,
+                    const roomTypes = subject?.is_thuc_hanh ? [false, true] : [false]
+                    const missingRoomTypes = roomTypes.filter((isPractice) =>
+                      !selectedCampusRooms.some(
+                        (room) =>
+                          room.capacity >= registration.so_luong &&
+                          room.is_thuc_hanh === isPractice,
+                      ),
                     )
                     return (
-                      <div key={registration.id}>
-                        <Checkbox
-                          checked={isPractice}
-                          onChange={(event) => {
-                            setPracticeRegistrationIds((current) =>
-                              event.target.checked
-                                ? [...new Set([...current, registration.id])]
-                                : current.filter((id) => id !== registration.id),
-                            )
-                            setAutomaticScheduleError(null)
-                          }}
-                        >
+                      <Flex key={registration.id} vertical gap={4}>
+                        <Flex align="center" gap={8} wrap="wrap">
                           {schoolClass?.name ?? `Lớp ${registration.lop_id}`}
                           {' · '}
                           {subject?.name ?? `Môn ${registration.mon_id}`}
                           {' · '}
                           {registration.so_luong} sinh viên
-                        </Checkbox>
-                        {automaticScheduleCampusId !== undefined && suitableRooms.length === 0 && (
-                          <Typography.Text type="danger" style={{ display: 'block', marginLeft: 24 }}>
-                            {isPractice && hasAnyCapacityRoom
+                          <Tag color={subject?.is_thuc_hanh ? 'purple' : 'blue'}>
+                          {subject?.is_thuc_hanh ? 'Lý thuyết + thực hành' : 'Lý thuyết'}
+                          </Tag>
+                        </Flex>
+                        {automaticScheduleCampusId !== undefined &&
+                          missingRoomTypes.map((isPractice) => (
+                          <Typography.Text key={String(isPractice)} type="danger">
+                            {isPractice
                               ? 'Thiếu phòng thực hành đủ sức chứa tại cơ sở này.'
-                              : `Không có phòng đủ ${registration.so_luong} chỗ tại cơ sở này.`}
+                              : selectedCampusRooms.some(
+                                    (room) => room.capacity >= registration.so_luong,
+                                  )
+                                ? 'Không có phòng thường đủ sức chứa; phòng thực hành không dùng cho lý thuyết.'
+                                : `Không có phòng đủ ${registration.so_luong} chỗ tại cơ sở này.`}
                           </Typography.Text>
-                        )}
-                      </div>
+                          ))}
+                      </Flex>
                     )
                   })}
                 </Space>
@@ -1059,10 +1003,18 @@ export default function TimetablePage() {
               style={{ flex: '1 1 180px' }}
             >
               <SearchFilterSelect
-                options={rooms.map((room) => ({
+                options={rooms
+                  .filter((room) =>
+                    room.is_thuc_hanh === Boolean(editingIsPractice) &&
+                    room.capacity >= (
+                      registrations.find((registration) => registration.id === editingRegistrationId)
+                        ?.so_luong ?? 0
+                    ),
+                  )
+                  .map((room) => ({
                   value: room.id,
                   label: `${room.name}${room.building ? ` · ${room.building}` : ''}${room.is_thuc_hanh ? ' · Phòng thực hành' : ''}`,
-                }))}
+                  }))}
               />
             </Form.Item>
           </Flex>
@@ -1092,7 +1044,11 @@ export default function TimetablePage() {
             label="Lớp thực hành"
             valuePropName="checked"
           >
-            <Switch checkedChildren="Thực hành" unCheckedChildren="Lý thuyết" />
+            <Switch
+              disabled={!editingSubjectHasPractice && !editingSchedule?.is_thuc_hanh}
+              checkedChildren="Thực hành"
+              unCheckedChildren="Lý thuyết"
+            />
           </Form.Item>
         </Form>
       </Modal>
@@ -1113,7 +1069,7 @@ type FragmentRowProps = {
   weekDays: ReturnType<typeof getWeekDays>
   schedules: Schedule[]
   classes: ClassOption[]
-  subjects: NamedOption[]
+  subjects: SubjectOption[]
   rooms: RoomOption[]
   campuses: CampusOption[]
   draggedScheduleId: number | null
