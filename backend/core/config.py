@@ -32,7 +32,7 @@ CORS_ORIGINS = [
 ]
 
 DEFAULT_ROLE_NAME = "User"
-ADMIN_ROLE_NAMES = {"admin", "superadmin"}
+ADMIN_ROLE_NAMES = {"admin", "super admin"}
 
 # Các đường dẫn không cần đăng nhập
 PUBLIC_PATHS = {

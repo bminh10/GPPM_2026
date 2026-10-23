@@ -125,6 +125,12 @@ class MonHoc(Base):
     code = Column(String, nullable=False, unique=True)
     name = Column(String, nullable=False)
     credits = Column(Integer, default=3)
+    is_thuc_hanh = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
 
     __table_args__ = (CheckConstraint("credits > 0", name="mon_hoc_credits_check"),)
 

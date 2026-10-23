@@ -139,13 +139,14 @@ const entities: EntityConfig[] = [
     createEndpoint: '/subjects',
     updateEndpoint: '/subjects',
     deleteEndpoint: '/subjects',
-    csvColumns: ['code', 'name', 'credits'],
-    csvSample: ['IT001', 'Nhập môn lập trình', '3'],
+    csvColumns: ['code', 'name', 'credits', 'is_thuc_hanh'],
+    csvSample: ['IT001', 'Nhập môn lập trình', '3', 'false'],
     requiredCsvColumns: ['code', 'name'],
     columns: [
       { key: 'code', title: 'Mã môn' },
       { key: 'name', title: 'Tên môn học' },
       { key: 'credits', title: 'Số tín chỉ' },
+      { key: 'is_thuc_hanh', title: 'Môn thực hành' },
     ],
   },
   {
@@ -385,6 +386,13 @@ function EntityFields({
           </Form.Item>
           <Form.Item name="credits" label="Số tín chỉ" rules={[{ required: true }]}>
             <InputNumber min={1} precision={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="is_thuc_hanh"
+            label="Có buổi thực hành"
+            valuePropName="checked"
+          >
+            <Switch checkedChildren="Có" unCheckedChildren="Không" />
           </Form.Item>
         </>
       )
