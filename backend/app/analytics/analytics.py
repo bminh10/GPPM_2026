@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from db.database import CaHoc, PhongHoc, ThoiKhoaBieu, get_db
+from db.database import CaHoc, DangKyMonHoc, Lop, PhongHoc, ThoiKhoaBieu, get_db
 
 router = APIRouter(prefix="/analytics", tags=["Phân tích"])
 
@@ -12,8 +12,18 @@ def _date_range(
     db: Session,
     start_date: date | None,
     end_date: date | None,
+    lop_id: int | None = None,
+    nganh_id: int | None = None,
+    hoc_ky_id: int | None = None,
+    campus_id: int | None = None,
+    building: str | None = None,
 ) -> tuple[date, date]:
-    schedules = db.query(ThoiKhoaBieu.start_date, ThoiKhoaBieu.end_date).all()
+    schedules = _schedule_query(
+        db, lop_id, nganh_id, hoc_ky_id, campus_id, building
+    ).with_entities(
+        ThoiKhoaBieu.start_date,
+        ThoiKhoaBieu.end_date,
+    ).all()
     if start_date is None:
         start_date = min((row.start_date for row in schedules), default=date.today())
     if end_date is None:
@@ -24,6 +34,34 @@ def _date_range(
             detail="Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.",
         )
     return start_date, end_date
+
+
+def _schedule_query(
+    db: Session,
+    lop_id: int | None,
+    nganh_id: int | None,
+    hoc_ky_id: int | None,
+    campus_id: int | None = None,
+    building: str | None = None,
+):
+    query = db.query(ThoiKhoaBieu)
+    if lop_id is not None or nganh_id is not None:
+        query = query.join(DangKyMonHoc)
+    if lop_id is not None:
+        query = query.filter(DangKyMonHoc.lop_id == lop_id)
+    if nganh_id is not None:
+        query = query.join(Lop, DangKyMonHoc.lop_id == Lop.id).filter(
+            Lop.nganh_id == nganh_id
+        )
+    if hoc_ky_id is not None:
+        query = query.filter(ThoiKhoaBieu.hoc_ky_id == hoc_ky_id)
+    if campus_id is not None or building is not None:
+        query = query.join(PhongHoc)
+    if campus_id is not None:
+        query = query.filter(PhongHoc.campus_id == campus_id)
+    if building is not None:
+        query = query.filter(PhongHoc.building == building)
+    return query
 
 
 def _count_weekdays(start_date: date, end_date: date, day_of_week: int) -> int:
@@ -42,11 +80,21 @@ def _utilization(
     db: Session,
     start_date: date,
     end_date: date,
+    lop_id: int | None = None,
+    nganh_id: int | None = None,
+    hoc_ky_id: int | None = None,
+    campus_id: int | None = None,
+    building: str | None = None,
 ) -> list[dict]:
     slots_count = db.query(CaHoc).count()
-    rooms = db.query(PhongHoc).order_by(PhongHoc.name).all()
+    room_query = db.query(PhongHoc)
+    if campus_id is not None:
+        room_query = room_query.filter(PhongHoc.campus_id == campus_id)
+    if building is not None:
+        room_query = room_query.filter(PhongHoc.building == building)
+    rooms = room_query.order_by(PhongHoc.name).all()
     schedules = (
-        db.query(ThoiKhoaBieu)
+        _schedule_query(db, lop_id, nganh_id, hoc_ky_id, campus_id, building)
         .filter(
             ThoiKhoaBieu.start_date <= end_date,
             ThoiKhoaBieu.end_date >= start_date,
@@ -85,13 +133,22 @@ def _utilization(
 def get_room_utilization(
     start_date: date | None = None,
     end_date: date | None = None,
+    lop_id: int | None = None,
+    nganh_id: int | None = None,
+    hoc_ky_id: int | None = None,
+    campus_id: int | None = None,
+    building: str | None = None,
     db: Session = Depends(get_db),
 ):
-    start_date, end_date = _date_range(db, start_date, end_date)
+    start_date, end_date = _date_range(
+        db, start_date, end_date, lop_id, nganh_id, hoc_ky_id, campus_id, building
+    )
     return {
         "start_date": start_date,
         "end_date": end_date,
-        "rooms": _utilization(db, start_date, end_date),
+        "rooms": _utilization(
+            db, start_date, end_date, lop_id, nganh_id, hoc_ky_id, campus_id, building
+        ),
     }
 
 
@@ -99,11 +156,18 @@ def get_room_utilization(
 def get_room_demand(
     start_date: date | None = None,
     end_date: date | None = None,
+    lop_id: int | None = None,
+    nganh_id: int | None = None,
+    hoc_ky_id: int | None = None,
+    campus_id: int | None = None,
+    building: str | None = None,
     db: Session = Depends(get_db),
 ):
-    start_date, end_date = _date_range(db, start_date, end_date)
+    start_date, end_date = _date_range(
+        db, start_date, end_date, lop_id, nganh_id, hoc_ky_id, campus_id, building
+    )
     schedules = (
-        db.query(ThoiKhoaBieu)
+        _schedule_query(db, lop_id, nganh_id, hoc_ky_id, campus_id, building)
         .filter(
             ThoiKhoaBieu.start_date <= end_date,
             ThoiKhoaBieu.end_date >= start_date,
@@ -145,10 +209,19 @@ def get_underutilized_rooms(
     threshold: float = Query(default=0.2, ge=0, le=1),
     start_date: date | None = None,
     end_date: date | None = None,
+    lop_id: int | None = None,
+    nganh_id: int | None = None,
+    hoc_ky_id: int | None = None,
+    campus_id: int | None = None,
+    building: str | None = None,
     db: Session = Depends(get_db),
 ):
-    start_date, end_date = _date_range(db, start_date, end_date)
-    rooms = _utilization(db, start_date, end_date)
+    start_date, end_date = _date_range(
+        db, start_date, end_date, lop_id, nganh_id, hoc_ky_id, campus_id, building
+    )
+    rooms = _utilization(
+        db, start_date, end_date, lop_id, nganh_id, hoc_ky_id, campus_id, building
+    )
     return {
         "start_date": start_date,
         "end_date": end_date,

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from db.database import Lop, Nganh, ThoiKhoaBieu, get_db
+from db.database import DangKyMonHoc, Lop, Nganh, get_db
 from utils.commit import commit_db
 
 router = APIRouter(prefix="/classes", tags=["Classes"])
@@ -106,8 +106,8 @@ def delete_class(id: int, db: Session = Depends(get_db)):
             detail="Class not found",
         )
     if (
-        db.query(ThoiKhoaBieu)
-        .filter(ThoiKhoaBieu.lop_id == id)
+        db.query(DangKyMonHoc)
+        .filter(DangKyMonHoc.lop_id == id)
         .first()
         is not None
     ):

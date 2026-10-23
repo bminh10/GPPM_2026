@@ -8,6 +8,7 @@ from app.classes.classes import router as routerClasses
 from app.dashboard.dashboard import router as routerDashboard
 from app.majors.majors import router as routerMajors
 from app.optimization.optimization import router as routerOptimization
+from app.registrations.registrations import router as routerRegistrations
 from app.resources.resources import router as routerResources
 from app.rooms.rooms import router as routerRooms
 from app.classes.classes import router as routerClasses
@@ -34,6 +35,7 @@ for router in (
     routerSemesters,
     routerTimeSlots,
     routerSchedules,
+    routerRegistrations,
     routerDashboard,
     routerAnalytics,
     routerOptimization,

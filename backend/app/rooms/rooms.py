@@ -12,13 +12,16 @@ class RoomData(BaseModel):
     name: str
     building: str | None = None
     capacity: int = Field(default=0, ge=0)
+    is_thuc_hanh: bool = False
     campus_id: int
+    
 
 
 class RoomUpdate(BaseModel):
     name: str | None = None
     building: str | None = None
     capacity: int | None = Field(default=None, ge=0)
+    is_thuc_hanh: bool | None = None
     campus_id: int | None = None
 
 
@@ -29,6 +32,7 @@ class RoomResponse(BaseModel):
     name: str
     building: str | None
     capacity: int
+    is_thuc_hanh: bool
     campus_id: int
 
 
@@ -75,11 +79,11 @@ def update_room(id: int, data: RoomUpdate, db: Session = Depends(get_db)):
     update_data = data.model_dump(exclude_unset=True)
     if any(
         field in update_data and update_data[field] is None
-        for field in ("name", "capacity", "campus_id")
+        for field in ("name", "capacity", "campus_id", "is_thuc_hanh")
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Room name, capacity, and campus_id cannot be null",
+            detail="Room name, capacity, campus_id, and is_thuc_hanh cannot be null",
         )
     if "campus_id" in update_data and update_data["campus_id"] is not None:
         require_campus(update_data["campus_id"], db)

@@ -7,6 +7,8 @@ import {
   Empty,
   Flex,
   Row,
+  Select,
+  Space,
   Spin,
   Statistic,
   Table,
@@ -62,27 +64,148 @@ type UnderutilizedRoomsResponse = {
   rooms: RoomUtilization[]
 }
 
+type MajorOption = { id: number; name: string }
+type ClassOption = { id: number; name: string; nganh_id: number }
+type SemesterOption = { id: number; name: string; start_date: string; end_date: string }
+type WeekOption = { start_date: string; end_date: string; label: string }
+type CampusOption = { id: number; name: string }
+type RoomOption = { id: number; building: string | null; campus_id: number }
+
 const dayNames = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('vi-VN').format(new Date(`${value}T00:00:00`))
 }
 
+function toDateString(value: Date) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function getWeeks(semester: SemesterOption | undefined): WeekOption[] {
+  if (!semester) return []
+  const semesterStart = new Date(`${semester.start_date}T00:00:00`)
+  const semesterEnd = new Date(`${semester.end_date}T00:00:00`)
+  const cursor = new Date(semesterStart)
+  cursor.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7))
+  const weeks: WeekOption[] = []
+
+  while (cursor <= semesterEnd) {
+    const weekStart = new Date(Math.max(cursor.getTime(), semesterStart.getTime()))
+    const sunday = new Date(cursor)
+    sunday.setDate(sunday.getDate() + 6)
+    const weekEnd = new Date(Math.min(sunday.getTime(), semesterEnd.getTime()))
+    weeks.push({
+      start_date: toDateString(weekStart),
+      end_date: toDateString(weekEnd),
+      label: `${formatDate(toDateString(weekStart))} – ${formatDate(toDateString(weekEnd))}`,
+    })
+    cursor.setDate(cursor.getDate() + 7)
+  }
+
+  return weeks
+}
+
 export default function Dashboard() {
   const [utilization, setUtilization] = useState<RoomUtilizationResponse | null>(null)
   const [demand, setDemand] = useState<RoomDemandResponse | null>(null)
   const [underutilized, setUnderutilized] = useState<UnderutilizedRoomsResponse | null>(null)
+  const [majors, setMajors] = useState<MajorOption[]>([])
+  const [classes, setClasses] = useState<ClassOption[]>([])
+  const [semesters, setSemesters] = useState<SemesterOption[]>([])
+  const [campuses, setCampuses] = useState<CampusOption[]>([])
+  const [rooms, setRooms] = useState<RoomOption[]>([])
+  const [filters, setFilters] = useState<{
+    majorId: number | null
+    classId: number | null
+    semesterId: number | null
+    week: WeekOption | null
+    campusId: number | null
+    building: string | null
+  }>({ majorId: null, classId: null, semesterId: null, week: null, campusId: null, building: null })
   const [loading, setLoading] = useState(true)
+  const [filtersLoading, setFiltersLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [filtersError, setFiltersError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     let active = true
 
     Promise.all([
-      apiClient.get<RoomUtilizationResponse>('/analytics/room-utilization'),
-      apiClient.get<RoomDemandResponse>('/analytics/room-demand'),
-      apiClient.get<UnderutilizedRoomsResponse>('/analytics/underutilized-rooms'),
+      apiClient.get<MajorOption[]>('/majors'),
+      apiClient.get<ClassOption[]>('/classes'),
+      apiClient.get<SemesterOption[]>('/semesters'),
+      apiClient.get<CampusOption[]>('/campus/all'),
+      apiClient.get<RoomOption[]>('/rooms'),
+    ])
+      .then(([majorsResponse, classesResponse, semestersResponse, campusesResponse, roomsResponse]) => {
+        if (!active) return
+        setMajors(majorsResponse.data)
+        setClasses(classesResponse.data)
+        setSemesters(semestersResponse.data)
+        setCampuses(campusesResponse.data)
+        setRooms(roomsResponse.data)
+        const campusesWithRooms = campusesResponse.data.filter((campus) =>
+          roomsResponse.data.some((room) => room.campus_id === campus.id),
+        )
+        setFilters((current) => ({
+          ...current,
+          campusId: campusesWithRooms[0]?.id ?? null,
+        }))
+      })
+      .catch((requestError: unknown) => {
+        if (active) setFiltersError(getErrorMessage(requestError))
+      })
+      .finally(() => {
+        if (active) setFiltersLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const selectedSemester = semesters.find((semester) => semester.id === filters.semesterId)
+  const campusesWithRooms = useMemo(
+    () => campuses.filter((campus) => rooms.some((room) => room.campus_id === campus.id)),
+    [campuses, rooms],
+  )
+  const availableBuildings = useMemo(
+    () => [...new Set(rooms
+      .filter((room) => filters.campusId === null || room.campus_id === filters.campusId)
+      .map((room) => room.building)
+      .filter((building): building is string => Boolean(building)))].sort(),
+    [filters.campusId, rooms],
+  )
+  const weeks = useMemo(() => getWeeks(selectedSemester), [selectedSemester])
+  const availableClasses = useMemo(
+    () => classes.filter((schoolClass) => filters.majorId === null || schoolClass.nganh_id === filters.majorId),
+    [classes, filters.majorId],
+  )
+
+  const analyticsParams = useMemo(() => ({
+    ...(filters.classId !== null ? { lop_id: filters.classId } : {}),
+    ...(filters.majorId !== null ? { nganh_id: filters.majorId } : {}),
+    ...(filters.semesterId !== null ? { hoc_ky_id: filters.semesterId } : {}),
+    ...(filters.campusId !== null ? { campus_id: filters.campusId } : {}),
+    ...(filters.building !== null ? { building: filters.building } : {}),
+    ...(filters.week
+      ? { start_date: filters.week.start_date, end_date: filters.week.end_date }
+      : selectedSemester
+        ? { start_date: selectedSemester.start_date, end_date: selectedSemester.end_date }
+        : {}),
+  }), [filters, selectedSemester])
+
+  useEffect(() => {
+    let active = true
+
+    Promise.all([
+      apiClient.get<RoomUtilizationResponse>('/analytics/room-utilization', { params: analyticsParams }),
+      apiClient.get<RoomDemandResponse>('/analytics/room-demand', { params: analyticsParams }),
+      apiClient.get<UnderutilizedRoomsResponse>('/analytics/underutilized-rooms', { params: analyticsParams }),
     ])
       .then(([utilizationResponse, demandResponse, underutilizedResponse]) => {
         if (!active) return
@@ -100,12 +223,18 @@ export default function Dashboard() {
     return () => {
       active = false
     }
-  }, [refreshKey])
+  }, [analyticsParams, refreshKey])
 
   const refresh = () => {
     setLoading(true)
     setError(null)
     setRefreshKey((key) => key + 1)
+  }
+
+  const updateFilters = (updates: Partial<typeof filters>) => {
+    setLoading(true)
+    setError(null)
+    setFilters((current) => ({ ...current, ...updates }))
   }
 
   const averageUtilization = useMemo(() => {
@@ -124,13 +253,13 @@ export default function Dashboard() {
       valueFormatter: (value: unknown) => `${Number(value).toFixed(1)}%`,
     },
     grid: { left: 16, right: 32, top: 12, bottom: 24, containLabel: true },
-    xAxis: {
+    yAxis: {
       type: 'value',
       max: 100,
       axisLabel: { formatter: '{value}%' },
       splitLine: { lineStyle: { color: '#edf1f5' } },
     },
-    yAxis: {
+    xAxis: {
       type: 'category',
       data: [...(utilization?.rooms ?? [])].reverse().map((room) => room.room_name),
       axisTick: { show: false },
@@ -235,6 +364,109 @@ export default function Dashboard() {
         </Button>
       </Flex>
 
+      <Card size="small">
+        <Space wrap style={{ width: '100%' }} size={[12, 12]}>
+          <Select
+            aria-label="Lọc theo cơ sở"
+            placeholder="Tất cả cơ sở"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            loading={filtersLoading}
+            style={{ width: 220 }}
+            value={filters.campusId ?? undefined}
+            options={campusesWithRooms.map((campus) => ({ value: campus.id, label: campus.name }))}
+            onChange={(campusId: number | undefined) =>
+              updateFilters({
+                campusId: campusId ?? null,
+                building: null,
+              })
+            }
+          />
+          <Select
+            aria-label="Lọc theo tòa"
+            placeholder="Tất cả tòa"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            disabled={availableBuildings.length === 0}
+            style={{ width: 200 }}
+            value={filters.building ?? undefined}
+            options={availableBuildings.map((building) => ({ value: building, label: building }))}
+            onChange={(building: string | undefined) =>
+              updateFilters({ building: building ?? null })
+            }
+          />
+          <Select
+            aria-label="Lọc theo ngành"
+            placeholder="Tất cả ngành"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            loading={filtersLoading}
+            style={{ width: 220 }}
+            value={filters.majorId ?? undefined}
+            options={majors.map((major) => ({ value: major.id, label: major.name }))}
+            onChange={(majorId: number | undefined) =>
+              updateFilters({
+                majorId: majorId ?? null,
+                classId: null,
+              })
+            }
+          />
+          <Select
+            aria-label="Lọc theo lớp"
+            placeholder="Tất cả lớp"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            loading={filtersLoading}
+            style={{ width: 220 }}
+            value={filters.classId ?? undefined}
+            options={availableClasses.map((schoolClass) => ({
+              value: schoolClass.id,
+              label: schoolClass.name,
+            }))}
+            onChange={(classId: number | undefined) => updateFilters({ classId: classId ?? null })}
+          />
+          <Select
+            aria-label="Lọc theo học kỳ"
+            placeholder="Tất cả học kỳ"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            loading={filtersLoading}
+            style={{ width: 220 }}
+            value={filters.semesterId ?? undefined}
+            options={semesters.map((semester) => ({ value: semester.id, label: semester.name }))}
+            onChange={(semesterId: number | undefined) =>
+              updateFilters({ semesterId: semesterId ?? null, week: null })
+            }
+          />
+          <Select
+            aria-label="Lọc theo tuần"
+            placeholder="Cả khoảng thời gian"
+            allowClear
+            disabled={filters.semesterId === null}
+            style={{ width: 260 }}
+            value={filters.week?.start_date}
+            options={weeks.map((week) => ({ value: week.start_date, label: week.label }))}
+            onChange={(startDate: string | undefined) =>
+              updateFilters({ week: weeks.find((week) => week.start_date === startDate) ?? null })
+            }
+          />
+        </Space>
+        {filtersError && (
+          <Alert
+            style={{ marginTop: 12 }}
+            type="error"
+            showIcon
+            message="Không thể tải danh sách bộ lọc"
+            description={filtersError}
+          />
+        )}
+      </Card>
+
       {error && (
         <Alert
           type="error"
@@ -292,7 +524,13 @@ export default function Dashboard() {
           </Col>
 
           <Col xs={24} xl={12}>
-            <Card title="Tỷ lệ sử dụng theo phòng">
+            <Card
+              title={[
+                'Tỷ lệ sử dụng theo phòng',
+                campusesWithRooms.find((campus) => campus.id === filters.campusId)?.name,
+                filters.building,
+              ].filter(Boolean).join(' · ')}
+            >
               {utilization?.rooms.length ? (
                 <EChart option={utilizationOption} />
               ) : (
@@ -301,7 +539,7 @@ export default function Dashboard() {
             </Card>
           </Col>
           <Col xs={24} xl={12}>
-            <Card title="Nhu cầu phòng theo ngày và ca học">
+            <Card title="Nhu cầu phòng theo ngày và ca học (số lượng buổi trong học kỳ)">
               {demand?.demand.length ? (
                 <EChart option={demandOption} />
               ) : (

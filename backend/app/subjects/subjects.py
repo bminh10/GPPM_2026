@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from db.database import MonHoc, ThoiKhoaBieu, get_db
+from db.database import DangKyMonHoc, MonHoc, get_db
 from utils.commit import commit_db
 
 router = APIRouter(prefix="/subjects", tags=["Subjects"])
@@ -100,8 +100,8 @@ def delete_subject(id: int, db: Session = Depends(get_db)):
             detail="Subject not found",
         )
     if (
-        db.query(ThoiKhoaBieu)
-        .filter(ThoiKhoaBieu.mon_hoc_id == id)
+        db.query(DangKyMonHoc)
+        .filter(DangKyMonHoc.mon_id == id)
         .first()
         is not None
     ):
