@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ortools.sat.python import cp_model
 
 from app.auth.dependencies import get_current_user
+from core.redis_cache import invalidate_cache_prefix
 from app.schedules.schedules import find_conflicts
 from app.optimization.scheduling_core import (
     FixedSchedule,
@@ -607,6 +608,7 @@ def automatically_schedule_semester(
             db.delete(schedule)
         db.add_all([*historical_schedule_copies, *new_schedules])
         db.commit()
+        invalidate_cache_prefix("analytics:")
     except SQLAlchemyError:
         db.rollback()
         raise

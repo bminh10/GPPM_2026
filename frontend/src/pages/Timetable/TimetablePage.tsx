@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
   Alert,
@@ -28,6 +28,7 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import axios from 'axios'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 
@@ -85,6 +86,16 @@ type AutomaticScheduleMode = 'missing' | 'all'
 type AutomaticScheduleScope = 'all' | 'faculty' | 'registrations'
 
 const DAY_NAMES = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']
+const EMPTY_CLASSES: ClassOption[] = []
+const EMPTY_REGISTRATIONS: RegistrationOption[] = []
+const EMPTY_SUBJECTS: SubjectOption[] = []
+const EMPTY_ROOMS: RoomOption[] = []
+const EMPTY_CAMPUSES: CampusOption[] = []
+const EMPTY_SEMESTERS: SemesterOption[] = []
+const EMPTY_TIME_SLOTS: TimeSlotOption[] = []
+const EMPTY_FACULTIES: FacultyOption[] = []
+const EMPTY_MAJORS: MajorOption[] = []
+const EMPTY_SCHEDULES: Schedule[] = []
 
 function toDateString(value: Date) {
   const year = value.getFullYear()
@@ -135,27 +146,12 @@ function formatTime(value: string) {
 }
 
 export default function TimetablePage() {
-  const [schedules, setSchedules] = useState<Schedule[]>([])
-  const [registrations, setRegistrations] = useState<RegistrationOption[]>([])
-  const [classes, setClasses] = useState<ClassOption[]>([])
-  const [faculties, setFaculties] = useState<FacultyOption[]>([])
-  const [majors, setMajors] = useState<MajorOption[]>([])
-  const [subjects, setSubjects] = useState<SubjectOption[]>([])
-  const [rooms, setRooms] = useState<RoomOption[]>([])
-  const [campuses, setCampuses] = useState<CampusOption[]>([])
-  const [semesters, setSemesters] = useState<SemesterOption[]>([])
-  const [timeSlots, setTimeSlots] = useState<TimeSlotOption[]>([])
+  const queryClient = useQueryClient()
   const [semesterId, setSemesterId] = useState<number>()
   const [facultyId, setFacultyId] = useState<number>()
   const [majorId, setMajorId] = useState<number>()
   const [roomId, setRoomId] = useState<number>()
   const [weekAnchor, setWeekAnchor] = useState(() => toDateString(new Date()))
-  const [referencesLoading, setReferencesLoading] = useState(true)
-  const [referencesError, setReferencesError] = useState<string | null>(null)
-  const [scheduleError, setScheduleError] = useState<string | null>(null)
-  const [reloadKey, setReloadKey] = useState(0)
-  const [referenceReloadKey, setReferenceReloadKey] = useState(0)
-  const [loadedScheduleKey, setLoadedScheduleKey] = useState<string | null>(null)
   const [draggedScheduleId, setDraggedScheduleId] = useState<number | null>(null)
   const [movingScheduleId, setMovingScheduleId] = useState<number | null>(null)
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
@@ -172,88 +168,103 @@ export default function TimetablePage() {
     useState<number[]>([])
   const [confirmScheduleReplacement, setConfirmScheduleReplacement] = useState(false)
   const [automaticScheduleCampusId, setAutomaticScheduleCampusId] = useState<number>()
-  const [automaticScheduleSchedules, setAutomaticScheduleSchedules] = useState<Schedule[]>([])
   const [automaticScheduleError, setAutomaticScheduleError] = useState<string | null>(null)
   const [editForm] = Form.useForm<ScheduleEditValues>()
   const editingRegistrationId = Form.useWatch('dang_ky_mon_hoc_id', editForm)
   const editingIsPractice = Form.useWatch('is_thuc_hanh', editForm)
+  const [messageApi, contextHolder] = message.useMessage()
+
+  const referencesQuery = useQuery({
+    queryKey: ['timetable', 'references'],
+    queryFn: async () => {
+      const [
+        classesResult,
+        registrationsResult,
+        subjectsResult,
+        roomsResult,
+        campusesResult,
+        semestersResult,
+        slotsResult,
+        facultiesResult,
+        majorsResult,
+      ] = await Promise.all([
+        apiClient.get<ClassOption[]>('/classes'),
+        apiClient.get<RegistrationOption[]>('/course-registrations'),
+        apiClient.get<SubjectOption[]>('/subjects'),
+        apiClient.get<RoomOption[]>('/rooms'),
+        apiClient.get<CampusOption[]>('/campus/all'),
+        apiClient.get<SemesterOption[]>('/semesters'),
+        apiClient.get<TimeSlotOption[]>('/time-slots'),
+        apiClient.get<FacultyOption[]>('/faculties'),
+        apiClient.get<MajorOption[]>('/majors'),
+      ])
+      return {
+        classes: classesResult.data,
+        registrations: registrationsResult.data,
+        subjects: subjectsResult.data,
+        rooms: roomsResult.data,
+        campuses: campusesResult.data,
+        semesters: semestersResult.data,
+        timeSlots: slotsResult.data,
+        faculties: facultiesResult.data,
+        majors: majorsResult.data,
+      }
+    },
+  })
+  const classes = referencesQuery.data?.classes ?? EMPTY_CLASSES
+  const registrations = referencesQuery.data?.registrations ?? EMPTY_REGISTRATIONS
+  const subjects = referencesQuery.data?.subjects ?? EMPTY_SUBJECTS
+  const rooms = referencesQuery.data?.rooms ?? EMPTY_ROOMS
+  const campuses = referencesQuery.data?.campuses ?? EMPTY_CAMPUSES
+  const semesters = referencesQuery.data?.semesters ?? EMPTY_SEMESTERS
+  const timeSlots = referencesQuery.data?.timeSlots ?? EMPTY_TIME_SLOTS
+  const faculties = referencesQuery.data?.faculties ?? EMPTY_FACULTIES
+  const majors = referencesQuery.data?.majors ?? EMPTY_MAJORS
+  const referencesLoading = referencesQuery.isLoading
+  const referencesError = referencesQuery.error
+    ? getErrorMessage(referencesQuery.error)
+    : null
   const editingSubjectHasPractice = subjects.find(
     (subject) =>
       subject.id ===
       registrations.find((registration) => registration.id === editingRegistrationId)?.mon_id,
   )?.is_thuc_hanh
-  const [messageApi, contextHolder] = message.useMessage()
 
-  useEffect(() => {
-    let active = true
-    Promise.all([
-      apiClient.get<ClassOption[]>('/classes'),
-      apiClient.get<RegistrationOption[]>('/course-registrations'),
-      apiClient.get<SubjectOption[]>('/subjects'),
-      apiClient.get<RoomOption[]>('/rooms'),
-      apiClient.get<CampusOption[]>('/campus/all'),
-      apiClient.get<SemesterOption[]>('/semesters'),
-      apiClient.get<TimeSlotOption[]>('/time-slots'),
-      apiClient.get<FacultyOption[]>('/faculties'),
-      apiClient.get<MajorOption[]>('/majors'),
-    ])
-      .then(([classesResult, registrationsResult, subjectsResult, roomsResult, campusesResult, semestersResult, slotsResult, facultiesResult, majorsResult]) => {
-        if (!active) return
-        setClasses(classesResult.data)
-        setFaculties(facultiesResult.data)
-        setMajors(majorsResult.data)
-        setRegistrations(registrationsResult.data)
-        setSubjects(subjectsResult.data)
-        setRooms(roomsResult.data)
-        setCampuses(campusesResult.data)
-        setSemesters(semestersResult.data)
-        setTimeSlots(slotsResult.data)
-        setSemesterId((current) => current ?? semestersResult.data[0]?.id)
+  const selectedSemesterId = semesterId ?? semesters[0]?.id
+
+  const scheduleParams = useMemo(() => ({
+    ...(selectedSemesterId !== undefined ? { semester_id: selectedSemesterId } : {}),
+    ...(facultyId !== undefined ? { khoa_id: facultyId } : {}),
+    ...(majorId !== undefined ? { nganh_id: majorId } : {}),
+    ...(roomId !== undefined ? { room_id: roomId } : {}),
+  }), [facultyId, majorId, roomId, selectedSemesterId])
+  const schedulesQuery = useQuery({
+    queryKey: ['schedules', scheduleParams],
+    queryFn: async () => {
+      const { data } = await apiClient.get<Schedule[]>('/schedules', {
+        params: scheduleParams,
       })
-      .catch((error: unknown) => {
-        if (active) setReferencesError(getErrorMessage(error))
+      return data
+    },
+    enabled: selectedSemesterId !== undefined,
+  })
+  const allSemesterSchedulesQuery = useQuery({
+    queryKey: ['schedules', { semester_id: selectedSemesterId }],
+    queryFn: async () => {
+      if (selectedSemesterId === undefined) return []
+      const { data } = await apiClient.get<Schedule[]>('/schedules', {
+        params: { semester_id: selectedSemesterId },
       })
-      .finally(() => {
-        if (active) setReferencesLoading(false)
-      })
-    return () => {
-      active = false
-    }
-  }, [referenceReloadKey])
-
-  const scheduleRequestKey = `${semesterId ?? ''}:${facultyId ?? ''}:${majorId ?? ''}:${roomId ?? ''}:${reloadKey}`
-  const scheduleLoading = semesterId !== undefined && loadedScheduleKey !== scheduleRequestKey
-
-  useEffect(() => {
-    let active = true
-    if (semesterId === undefined) return () => { active = false }
-
-    apiClient.get<Schedule[]>('/schedules', {
-      params: {
-        semester_id: semesterId,
-        ...(facultyId !== undefined ? { khoa_id: facultyId } : {}),
-        ...(majorId !== undefined ? { nganh_id: majorId } : {}),
-        ...(roomId !== undefined ? { room_id: roomId } : {}),
-      },
-    })
-    .then(({ data }) => {
-      if (!active) return
-      setSchedules(data)
-      setScheduleError(null)
-    })
-    .catch((error: unknown) => {
-      if (active) {
-        setSchedules([])
-        setScheduleError(getErrorMessage(error))
-      }
-    })
-    .finally(() => {
-      if (active) setLoadedScheduleKey(scheduleRequestKey)
-    })
-    return () => {
-    active = false
-    }
-  }, [facultyId, majorId, reloadKey, roomId, scheduleRequestKey, semesterId])
+      return data
+    },
+    enabled: automaticScheduleOpen && selectedSemesterId !== undefined,
+    staleTime: 15_000,
+  })
+  const schedules = schedulesQuery.data ?? EMPTY_SCHEDULES
+  const scheduleLoading = schedulesQuery.isFetching
+  const scheduleError = schedulesQuery.error
+    ? getErrorMessage(schedulesQuery.error)
+    : null
 
   const weekStart = useMemo(() => startOfWeek(weekAnchor), [weekAnchor])
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart])
@@ -294,12 +305,12 @@ export default function TimetablePage() {
     setWeekAnchor(toDateString(nextWeek))
   }
 
-  const selectedSemester = semesters.find((semester) => semester.id === semesterId)
+  const selectedSemester = semesters.find((semester) => semester.id === selectedSemesterId)
   const availableMajors = majors.filter(
     (major) => facultyId === undefined || major.khoa_id === facultyId,
   )
   const semesterRegistrations = registrations.filter(
-    (registration) => registration.hoc_ky_id === semesterId,
+    (registration) => registration.hoc_ky_id === selectedSemesterId,
   )
   const scopedSemesterRegistrations = semesterRegistrations.filter((registration) => {
     if (automaticScheduleScope === 'all') return true
@@ -321,7 +332,7 @@ export default function TimetablePage() {
     semesterRegistrations
       .filter((registration) => {
         if (automaticScheduleCampusId === undefined) return false
-        const registrationSchedules = automaticScheduleSchedules.filter(
+        const registrationSchedules = (allSemesterSchedulesQuery.data ?? []).filter(
           (schedule) =>
             schedule.dang_ky_mon_hoc_id === registration.id &&
             rooms.find((room) => room.id === schedule.phong_hoc_id)?.campus_id ===
@@ -350,16 +361,22 @@ export default function TimetablePage() {
     (room) => room.campus_id === automaticScheduleCampusId,
   )
   const openAutomaticSchedule = async () => {
-    if (semesterId === undefined) {
+    if (selectedSemesterId === undefined) {
       messageApi.error('Vui lòng chọn học kỳ trước khi tự động xếp lịch.')
       return
     }
     setAutomaticScheduleLoading(true)
     try {
-      const { data } = await apiClient.get<Schedule[]>('/schedules', {
-        params: { semester_id: semesterId },
+      await queryClient.fetchQuery({
+        queryKey: ['schedules', { semester_id: selectedSemesterId }],
+        queryFn: async () => {
+          const { data } = await apiClient.get<Schedule[]>('/schedules', {
+            params: { semester_id: selectedSemesterId },
+          })
+          return data
+        },
+        staleTime: 0,
       })
-      setAutomaticScheduleSchedules(data)
       setAutomaticScheduleMode('missing')
       setAutomaticScheduleScope('all')
       setAutomaticScheduleFacultyIds([])
@@ -376,7 +393,7 @@ export default function TimetablePage() {
   }
 
   const runAutomaticSchedule = async () => {
-    if (semesterId === undefined || automaticScheduleCampusId === undefined) return
+    if (selectedSemesterId === undefined || automaticScheduleCampusId === undefined) return
     setAutomaticScheduleLoading(true)
     setAutomaticScheduleError(null)
     try {
@@ -386,7 +403,7 @@ export default function TimetablePage() {
       }>(
         '/optimization/schedule',
         {
-          hoc_ky_id: semesterId,
+          hoc_ky_id: selectedSemesterId,
           campus_id: automaticScheduleCampusId,
           mode: automaticScheduleMode,
           ...(automaticScheduleScope === 'faculty'
@@ -398,8 +415,8 @@ export default function TimetablePage() {
         `Đã tạo ${data.scheduled_count} lịch cố định hằng tuần, thay thế ${data.replaced_count} lịch cũ.`,
       )
       setAutomaticScheduleOpen(false)
-      setReloadKey((key) => key + 1)
-      setReferenceReloadKey((key) => key + 1)
+      void queryClient.invalidateQueries({ queryKey: ['schedules'] })
+      void queryClient.invalidateQueries({ queryKey: ['analytics'] })
     } catch (error: unknown) {
       setAutomaticScheduleError(getErrorMessage(error))
     } finally {
@@ -429,7 +446,8 @@ export default function TimetablePage() {
       await apiClient.patch(`/schedules/${editingSchedule.id}`, values)
       messageApi.success('Đã cập nhật lịch học.')
       setEditingSchedule(null)
-      setReloadKey((key) => key + 1)
+      void queryClient.invalidateQueries({ queryKey: ['schedules'] })
+      void queryClient.invalidateQueries({ queryKey: ['analytics'] })
     } catch (error: unknown) {
       messageApi.error(getErrorMessage(error))
     } finally {
@@ -499,7 +517,8 @@ export default function TimetablePage() {
             ? 'Đã đồng bộ học kỳ lịch theo đăng ký và chuyển sang thứ/ca mới'
             : 'Đã chuyển lịch sang thứ/ca học mới',
       )
-      setReloadKey((key) => key + 1)
+      void queryClient.invalidateQueries({ queryKey: ['schedules'] })
+      void queryClient.invalidateQueries({ queryKey: ['analytics'] })
     } catch (error: unknown) {
       messageApi.error(getErrorMessage(error))
     } finally {
@@ -523,17 +542,15 @@ export default function TimetablePage() {
             icon={<ThunderboltOutlined />}
             onClick={() => void openAutomaticSchedule()}
             loading={automaticScheduleLoading}
-            disabled={referencesLoading || semesterId === undefined}
+            disabled={referencesLoading || selectedSemesterId === undefined}
           >
             Tự động xếp lịch
           </Button>
           <Button
             icon={<ReloadOutlined />}
             onClick={() => {
-              setReloadKey((key) => key + 1)
-              setReferenceReloadKey((key) => key + 1)
-              setReferencesLoading(true)
-              setReferencesError(null)
+              void queryClient.invalidateQueries({ queryKey: ['schedules'] })
+              void queryClient.invalidateQueries({ queryKey: ['timetable', 'references'] })
             }}
             loading={scheduleLoading || referencesLoading}
           >
@@ -543,7 +560,21 @@ export default function TimetablePage() {
       </Flex>
 
       {referencesError && <Alert type="error" showIcon message={referencesError} />}
-      {scheduleError && <Alert type="error" showIcon message={scheduleError} />}
+      {scheduleError && (
+        <Alert
+          type="error"
+          showIcon
+          message={scheduleError}
+          action={
+            <Button
+              size="small"
+              onClick={() => void schedulesQuery.refetch()}
+            >
+              Thử lại
+            </Button>
+          }
+        />
+      )}
 
       <Card>
         <Flex gap={12} wrap="wrap" align="end">
@@ -551,7 +582,7 @@ export default function TimetablePage() {
             <Typography.Text strong>Học kỳ</Typography.Text>
             <SearchFilterSelect
               aria-label="Lọc theo học kỳ"
-              value={semesterId}
+              value={selectedSemesterId}
               options={semesters.map((semester) => ({ value: semester.id, label: semester.name }))}
               placeholder="Chọn học kỳ"
               style={{ width: '100%', marginTop: 6 }}
@@ -650,7 +681,7 @@ export default function TimetablePage() {
       >
         {referencesLoading ? (
           <Flex justify="center" style={{ padding: 48 }}><Spin /></Flex>
-        ) : !semesterId ? (
+        ) : !selectedSemesterId ? (
           <Empty description="Chưa có học kỳ để hiển thị thời khóa biểu" />
         ) : scheduleLoading ? (
           <Flex justify="center" style={{ padding: 48 }}><Spin /></Flex>

@@ -1,11 +1,26 @@
+import hashlib
+import json
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from core.redis_cache import get_cached_json, set_cached_json
 from db.database import CaHoc, DangKyMonHoc, Lop, PhongHoc, ThoiKhoaBieu, get_db
 
 router = APIRouter(prefix="/analytics", tags=["Phân tích"])
+
+
+def _cache_key(endpoint: str, parameters: dict) -> str:
+    serialized_parameters = json.dumps(
+        parameters,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    digest = hashlib.sha256(serialized_parameters.encode()).hexdigest()
+    return f"analytics:{endpoint}:{digest}"
 
 
 def _date_range(
@@ -18,16 +33,24 @@ def _date_range(
     campus_id: int | None = None,
     building: str | None = None,
 ) -> tuple[date, date]:
-    schedules = _schedule_query(
+    if start_date is not None and end_date is not None:
+        if start_date > end_date:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.",
+            )
+        return start_date, end_date
+
+    date_bounds = _schedule_query(
         db, lop_id, nganh_id, hoc_ky_id, campus_id, building
     ).with_entities(
-        ThoiKhoaBieu.start_date,
-        ThoiKhoaBieu.end_date,
-    ).all()
+        func.min(ThoiKhoaBieu.start_date),
+        func.max(ThoiKhoaBieu.end_date),
+    ).first()
     if start_date is None:
-        start_date = min((row.start_date for row in schedules), default=date.today())
+        start_date = date_bounds[0] or date.today()
     if end_date is None:
-        end_date = max((row.end_date for row in schedules), default=start_date)
+        end_date = date_bounds[1] or start_date
     if start_date > end_date:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -143,13 +166,28 @@ def get_room_utilization(
     start_date, end_date = _date_range(
         db, start_date, end_date, lop_id, nganh_id, hoc_ky_id, campus_id, building
     )
-    return {
+    parameters = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "lop_id": lop_id,
+        "nganh_id": nganh_id,
+        "hoc_ky_id": hoc_ky_id,
+        "campus_id": campus_id,
+        "building": building,
+    }
+    key = _cache_key("room-utilization", parameters)
+    cached_response = get_cached_json(key)
+    if cached_response is not None:
+        return cached_response
+    response = {
         "start_date": start_date,
         "end_date": end_date,
         "rooms": _utilization(
             db, start_date, end_date, lop_id, nganh_id, hoc_ky_id, campus_id, building
         ),
     }
+    set_cached_json(key, response)
+    return response
 
 
 @router.get("/room-demand")
@@ -166,6 +204,19 @@ def get_room_demand(
     start_date, end_date = _date_range(
         db, start_date, end_date, lop_id, nganh_id, hoc_ky_id, campus_id, building
     )
+    parameters = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "lop_id": lop_id,
+        "nganh_id": nganh_id,
+        "hoc_ky_id": hoc_ky_id,
+        "campus_id": campus_id,
+        "building": building,
+    }
+    cache_key = _cache_key("room-demand", parameters)
+    cached_response = get_cached_json(cache_key)
+    if cached_response is not None:
+        return cached_response
     schedules = (
         _schedule_query(db, lop_id, nganh_id, hoc_ky_id, campus_id, building)
         .filter(
@@ -179,13 +230,13 @@ def get_room_demand(
     for schedule in schedules:
         overlap_start = max(start_date, schedule.start_date)
         overlap_end = min(end_date, schedule.end_date)
-        key = (schedule.day_of_week, schedule.ca_hoc_id)
-        demand[key] = demand.get(key, 0) + _count_weekdays(
+        demand_key = (schedule.day_of_week, schedule.ca_hoc_id)
+        demand[demand_key] = demand.get(demand_key, 0) + _count_weekdays(
             overlap_start,
             overlap_end,
             schedule.day_of_week,
         )
-    return {
+    response = {
         "start_date": start_date,
         "end_date": end_date,
         "demand": [
@@ -202,6 +253,8 @@ def get_room_demand(
             if slot_id in slots
         ],
     }
+    set_cached_json(cache_key, response)
+    return response
 
 
 @router.get("/underutilized-rooms")
@@ -219,12 +272,28 @@ def get_underutilized_rooms(
     start_date, end_date = _date_range(
         db, start_date, end_date, lop_id, nganh_id, hoc_ky_id, campus_id, building
     )
+    parameters = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "lop_id": lop_id,
+        "nganh_id": nganh_id,
+        "hoc_ky_id": hoc_ky_id,
+        "campus_id": campus_id,
+        "building": building,
+        "threshold": threshold,
+    }
+    key = _cache_key("underutilized-rooms", parameters)
+    cached_response = get_cached_json(key)
+    if cached_response is not None:
+        return cached_response
     rooms = _utilization(
         db, start_date, end_date, lop_id, nganh_id, hoc_ky_id, campus_id, building
     )
-    return {
+    response = {
         "start_date": start_date,
         "end_date": end_date,
         "threshold": threshold,
         "rooms": [room for room in rooms if room["utilization_rate"] < threshold],
     }
+    set_cached_json(key, response)
+    return response

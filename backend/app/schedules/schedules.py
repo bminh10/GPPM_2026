@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
+from core.redis_cache import invalidate_cache_prefix
 from app.subjects.subject_rules import determine_is_thuc_hanh
 from db.database import (
     CaHoc,
@@ -240,7 +241,9 @@ def create_schedule(
             status_code=status.HTTP_409_CONFLICT,
             detail={"message": "Lịch học bị trùng.", "conflicts": conflicts},
         )
-    return commit_db(ThoiKhoaBieu(**values), db)
+    schedule = commit_db(ThoiKhoaBieu(**values), db)
+    invalidate_cache_prefix("analytics:")
+    return schedule
 
 
 @router.patch("/{schedule_id}", response_model=ScheduleResponse)
@@ -290,6 +293,7 @@ def update_schedule(
         setattr(schedule, field, value)
     db.commit()
     db.refresh(schedule)
+    invalidate_cache_prefix("analytics:")
     return schedule
 
 
@@ -304,6 +308,7 @@ def delete_schedule(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch học.")
     db.delete(schedule)
     db.commit()
+    invalidate_cache_prefix("analytics:")
 
 
 @router.post("/check-conflicts")

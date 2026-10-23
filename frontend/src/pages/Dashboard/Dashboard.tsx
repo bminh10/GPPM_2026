@@ -26,6 +26,7 @@ import { GridComponent, TooltipComponent, VisualMapComponent } from 'echarts/com
 import { init, use as registerEChartsModules } from 'echarts/core'
 import type { ECharts, EChartsCoreOption } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 import SearchableTable from '../../components/common/SearchableTable'
@@ -81,6 +82,11 @@ type WeekOption = { start_date: string; end_date: string; label: string }
 type CampusOption = { id: number; name: string }
 type RoomOption = { id: number; building: string | null; campus_id: number }
 
+const EMPTY_MAJORS: MajorOption[] = []
+const EMPTY_CLASSES: ClassOption[] = []
+const EMPTY_SEMESTERS: SemesterOption[] = []
+const EMPTY_CAMPUSES: CampusOption[] = []
+const EMPTY_ROOMS: RoomOption[] = []
 const dayNames = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']
 
 function formatDate(value: string) {
@@ -119,76 +125,59 @@ function getWeeks(semester: SemesterOption | undefined): WeekOption[] {
 }
 
 export default function Dashboard() {
-  const [utilization, setUtilization] = useState<RoomUtilizationResponse | null>(null)
-  const [demand, setDemand] = useState<RoomDemandResponse | null>(null)
-  const [underutilized, setUnderutilized] = useState<UnderutilizedRoomsResponse | null>(null)
-  const [majors, setMajors] = useState<MajorOption[]>([])
-  const [classes, setClasses] = useState<ClassOption[]>([])
-  const [semesters, setSemesters] = useState<SemesterOption[]>([])
-  const [campuses, setCampuses] = useState<CampusOption[]>([])
-  const [rooms, setRooms] = useState<RoomOption[]>([])
+  const queryClient = useQueryClient()
   const [filters, setFilters] = useState<{
     majorId: number | null
     classId: number | null
     semesterId: number | null
     week: WeekOption | null
-    campusId: number | null
+    campusId: number | null | undefined
     building: string | null
-  }>({ majorId: null, classId: null, semesterId: null, week: null, campusId: null, building: null })
-  const [loading, setLoading] = useState(true)
-  const [filtersLoading, setFiltersLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [filtersError, setFiltersError] = useState<string | null>(null)
-  const [refreshKey, setRefreshKey] = useState(0)
+  }>({ majorId: null, classId: null, semesterId: null, week: null, campusId: undefined, building: null })
+  const referencesQuery = useQuery({
+    queryKey: ['dashboard', 'references'],
+    queryFn: async () => {
+      const [majorsResponse, classesResponse, semestersResponse, campusesResponse, roomsResponse] =
+        await Promise.all([
+          apiClient.get<MajorOption[]>('/majors'),
+          apiClient.get<ClassOption[]>('/classes'),
+          apiClient.get<SemesterOption[]>('/semesters'),
+          apiClient.get<CampusOption[]>('/campus/all'),
+          apiClient.get<RoomOption[]>('/rooms'),
+        ])
+      return {
+        majors: majorsResponse.data,
+        classes: classesResponse.data,
+        semesters: semestersResponse.data,
+        campuses: campusesResponse.data,
+        rooms: roomsResponse.data,
+      }
+    },
+  })
+  const majors = referencesQuery.data?.majors ?? EMPTY_MAJORS
+  const classes = referencesQuery.data?.classes ?? EMPTY_CLASSES
+  const semesters = referencesQuery.data?.semesters ?? EMPTY_SEMESTERS
+  const campuses = referencesQuery.data?.campuses ?? EMPTY_CAMPUSES
+  const rooms = referencesQuery.data?.rooms ?? EMPTY_ROOMS
+  const filtersLoading = referencesQuery.isLoading
+  const filtersError = referencesQuery.error
+    ? getErrorMessage(referencesQuery.error)
+    : null
 
-  useEffect(() => {
-    let active = true
-
-    Promise.all([
-      apiClient.get<MajorOption[]>('/majors'),
-      apiClient.get<ClassOption[]>('/classes'),
-      apiClient.get<SemesterOption[]>('/semesters'),
-      apiClient.get<CampusOption[]>('/campus/all'),
-      apiClient.get<RoomOption[]>('/rooms'),
-    ])
-      .then(([majorsResponse, classesResponse, semestersResponse, campusesResponse, roomsResponse]) => {
-        if (!active) return
-        setMajors(majorsResponse.data)
-        setClasses(classesResponse.data)
-        setSemesters(semestersResponse.data)
-        setCampuses(campusesResponse.data)
-        setRooms(roomsResponse.data)
-        const campusesWithRooms = campusesResponse.data.filter((campus) =>
-          roomsResponse.data.some((room) => room.campus_id === campus.id),
-        )
-        setFilters((current) => ({
-          ...current,
-          campusId: campusesWithRooms[0]?.id ?? null,
-        }))
-      })
-      .catch((requestError: unknown) => {
-        if (active) setFiltersError(getErrorMessage(requestError))
-      })
-      .finally(() => {
-        if (active) setFiltersLoading(false)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  const selectedSemester = semesters.find((semester) => semester.id === filters.semesterId)
   const campusesWithRooms = useMemo(
     () => campuses.filter((campus) => rooms.some((room) => room.campus_id === campus.id)),
     [campuses, rooms],
   )
+  const campusId = filters.campusId === undefined
+    ? campusesWithRooms[0]?.id ?? null
+    : filters.campusId
+  const selectedSemester = semesters.find((semester) => semester.id === filters.semesterId)
   const availableBuildings = useMemo(
     () => [...new Set(rooms
-      .filter((room) => filters.campusId === null || room.campus_id === filters.campusId)
+      .filter((room) => campusId === null || room.campus_id === campusId)
       .map((room) => room.building)
       .filter((building): building is string => Boolean(building)))].sort(),
-    [filters.campusId, rooms],
+    [campusId, rooms],
   )
   const weeks = useMemo(() => getWeeks(selectedSemester), [selectedSemester])
   const availableClasses = useMemo(
@@ -200,50 +189,42 @@ export default function Dashboard() {
     ...(filters.classId !== null ? { lop_id: filters.classId } : {}),
     ...(filters.majorId !== null ? { nganh_id: filters.majorId } : {}),
     ...(filters.semesterId !== null ? { hoc_ky_id: filters.semesterId } : {}),
-    ...(filters.campusId !== null ? { campus_id: filters.campusId } : {}),
+    ...(campusId !== null ? { campus_id: campusId } : {}),
     ...(filters.building !== null ? { building: filters.building } : {}),
     ...(filters.week
       ? { start_date: filters.week.start_date, end_date: filters.week.end_date }
       : selectedSemester
         ? { start_date: selectedSemester.start_date, end_date: selectedSemester.end_date }
         : {}),
-  }), [filters, selectedSemester])
+  }), [campusId, filters, selectedSemester])
 
-  useEffect(() => {
-    let active = true
-
-    Promise.all([
-      apiClient.get<RoomUtilizationResponse>('/analytics/room-utilization', { params: analyticsParams }),
-      apiClient.get<RoomDemandResponse>('/analytics/room-demand', { params: analyticsParams }),
-      apiClient.get<UnderutilizedRoomsResponse>('/analytics/underutilized-rooms', { params: analyticsParams }),
-    ])
-      .then(([utilizationResponse, demandResponse, underutilizedResponse]) => {
-        if (!active) return
-        setUtilization(utilizationResponse.data)
-        setDemand(demandResponse.data)
-        setUnderutilized(underutilizedResponse.data)
-      })
-      .catch((requestError: unknown) => {
-        if (active) setError(getErrorMessage(requestError))
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [analyticsParams, refreshKey])
+  const analyticsQuery = useQuery({
+    queryKey: ['analytics', analyticsParams],
+    queryFn: async () => {
+      const [utilizationResponse, demandResponse, underutilizedResponse] = await Promise.all([
+        apiClient.get<RoomUtilizationResponse>('/analytics/room-utilization', { params: analyticsParams }),
+        apiClient.get<RoomDemandResponse>('/analytics/room-demand', { params: analyticsParams }),
+        apiClient.get<UnderutilizedRoomsResponse>('/analytics/underutilized-rooms', { params: analyticsParams }),
+      ])
+      return {
+        utilization: utilizationResponse.data,
+        demand: demandResponse.data,
+        underutilized: underutilizedResponse.data,
+      }
+    },
+    enabled: referencesQuery.isSuccess,
+  })
+  const utilization = analyticsQuery.data?.utilization ?? null
+  const demand = analyticsQuery.data?.demand ?? null
+  const underutilized = analyticsQuery.data?.underutilized ?? null
+  const loading = analyticsQuery.isFetching
+  const error = analyticsQuery.error ? getErrorMessage(analyticsQuery.error) : null
 
   const refresh = () => {
-    setLoading(true)
-    setError(null)
-    setRefreshKey((key) => key + 1)
+    void queryClient.invalidateQueries({ queryKey: ['analytics'] })
   }
 
   const updateFilters = (updates: Partial<typeof filters>) => {
-    setLoading(true)
-    setError(null)
     setFilters((current) => ({ ...current, ...updates }))
   }
 
@@ -413,7 +394,7 @@ export default function Dashboard() {
               optionFilterProp="label"
               loading={filtersLoading}
               style={{ width: 220 }}
-              value={filters.campusId ?? undefined}
+              value={campusId ?? undefined}
               options={campusesWithRooms.map((campus) => ({ value: campus.id, label: campus.name }))}
               onChange={(campusId: number | undefined) =>
                 updateFilters({
@@ -582,7 +563,7 @@ export default function Dashboard() {
                   <Typography.Text strong>Tỷ lệ sử dụng theo phòng</Typography.Text>
                   <Typography.Text type="secondary">
                     {[
-                      campusesWithRooms.find((campus) => campus.id === filters.campusId)?.name,
+                      campusesWithRooms.find((campus) => campus.id === campusId)?.name,
                       filters.building,
                     ].filter(Boolean).join(' · ') || 'Tất cả cơ sở và tòa nhà'}
                   </Typography.Text>
