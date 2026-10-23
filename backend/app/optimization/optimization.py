@@ -467,21 +467,13 @@ def automatically_schedule_semester(
             eligible_rooms_for_meeting = [
                 room
                 for room in eligible_rooms
-                if room.is_thuc_hanh == is_practical
+                if not is_practical or room.is_thuc_hanh
             ]
             if not eligible_rooms_for_meeting:
                 if is_practical:
                     reason = "thiếu phòng thực hành đủ sức chứa"
-                elif any(
-                    room.capacity is not None and room.capacity >= required_capacity
-                    for room in rooms
-                ):
-                    reason = (
-                        f"không có phòng thường đủ sức chứa tại cơ sở {campus.name}; "
-                        "phòng thực hành không được dùng cho buổi lý thuyết"
-                    )
                 elif rooms:
-                    reason = f"không có phòng thường tại cơ sở {campus.name} đủ sức chứa"
+                    reason = f"không có phòng tại cơ sở {campus.name} đủ sức chứa"
                 else:
                     reason = f"cơ sở {campus.name} chưa có phòng học"
                 if registration.id not in registrations_without_rooms_ids:
@@ -536,6 +528,8 @@ def automatically_schedule_semester(
                                 (slot.start_time, slot.end_time, registration.id, variable)
                             )
                         room_penalty = room.capacity - required_capacity
+                        if not is_practical and room.is_thuc_hanh:
+                            room_penalty += 10
                         objective_terms.append(room_penalty * 100 * variable)
 
             if choices:

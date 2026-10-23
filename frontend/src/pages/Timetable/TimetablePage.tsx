@@ -943,7 +943,7 @@ export default function TimetablePage() {
                     const suitableRooms = selectedCampusRooms.filter(
                       (room) =>
                         room.capacity >= registration.so_luong &&
-                        room.is_thuc_hanh === isPractice,
+                        (!isPractice || room.is_thuc_hanh),
                     )
                     const hasAnyCapacityRoom = selectedCampusRooms.some(
                       (room) => room.capacity >= registration.so_luong,
@@ -971,8 +971,6 @@ export default function TimetablePage() {
                           <Typography.Text type="danger" style={{ display: 'block', marginLeft: 24 }}>
                             {isPractice && hasAnyCapacityRoom
                               ? 'Thiếu phòng thực hành đủ sức chứa tại cơ sở này.'
-                              : !isPractice && hasAnyCapacityRoom
-                                ? 'Không có phòng thường đủ sức chứa; phòng thực hành không dùng cho lý thuyết.'
                               : `Không có phòng đủ ${registration.so_luong} chỗ tại cơ sở này.`}
                           </Typography.Text>
                         )}
