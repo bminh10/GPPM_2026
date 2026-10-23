@@ -7,11 +7,9 @@ import {
   Empty,
   Flex,
   Row,
-  Select,
   Space,
   Spin,
   Statistic,
-  Table,
   Typography,
 } from 'antd'
 import {
@@ -27,6 +25,8 @@ import { init, use as registerEChartsModules } from 'echarts/core'
 import type { ECharts, EChartsCoreOption } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
+import SearchFilterSelect from '../../components/common/SearchFilterSelect'
+import SearchableTable from '../../components/common/SearchableTable'
 
 registerEChartsModules([BarChart, HeatmapChart, GridComponent, TooltipComponent, VisualMapComponent, CanvasRenderer])
 
@@ -366,7 +366,7 @@ export default function Dashboard() {
 
       <Card size="small">
         <Space wrap style={{ width: '100%' }} size={[12, 12]}>
-          <Select
+          <SearchFilterSelect
             aria-label="Lọc theo cơ sở"
             placeholder="Tất cả cơ sở"
             allowClear
@@ -383,7 +383,7 @@ export default function Dashboard() {
               })
             }
           />
-          <Select
+          <SearchFilterSelect
             aria-label="Lọc theo tòa"
             placeholder="Tất cả tòa"
             allowClear
@@ -397,7 +397,7 @@ export default function Dashboard() {
               updateFilters({ building: building ?? null })
             }
           />
-          <Select
+          <SearchFilterSelect
             aria-label="Lọc theo ngành"
             placeholder="Tất cả ngành"
             allowClear
@@ -414,7 +414,7 @@ export default function Dashboard() {
               })
             }
           />
-          <Select
+          <SearchFilterSelect
             aria-label="Lọc theo lớp"
             placeholder="Tất cả lớp"
             allowClear
@@ -429,7 +429,7 @@ export default function Dashboard() {
             }))}
             onChange={(classId: number | undefined) => updateFilters({ classId: classId ?? null })}
           />
-          <Select
+          <SearchFilterSelect
             aria-label="Lọc theo học kỳ"
             placeholder="Tất cả học kỳ"
             allowClear
@@ -443,7 +443,7 @@ export default function Dashboard() {
               updateFilters({ semesterId: semesterId ?? null, week: null })
             }
           />
-          <Select
+          <SearchFilterSelect
             aria-label="Lọc theo tuần"
             placeholder="Cả khoảng thời gian"
             allowClear
@@ -549,12 +549,14 @@ export default function Dashboard() {
           </Col>
           <Col span={24}>
             <Card title="Phòng có tỷ lệ sử dụng thấp">
-              <Table<RoomUtilization>
-                rowKey="room_id"
+              <SearchableTable<RoomUtilization>
+                rowKey={(room) => room.room_id}
                 size="small"
                 pagination={{ pageSize: 5, hideOnSinglePage: true }}
                 dataSource={underutilized?.rooms ?? []}
-                locale={{ emptyText: 'Không có phòng nào dưới ngưỡng sử dụng' }}
+                searchPlaceholder="Tìm phòng..."
+                getSearchText={(room) => room.room_name}
+                emptyText="Không có phòng nào dưới ngưỡng sử dụng"
                 columns={[
                   { title: 'Phòng', dataIndex: 'room_name', key: 'room_name' },
                   { title: 'Lượt sử dụng', dataIndex: 'occupied_slots', key: 'occupied_slots' },

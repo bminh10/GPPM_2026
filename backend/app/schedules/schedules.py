@@ -85,6 +85,16 @@ def _validate_references(db: Session, values: dict) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Lịch thực hành phải được xếp vào phòng được đánh dấu là phòng thực hành.",
         )
+    registration = (
+        db.query(DangKyMonHoc)
+        .filter(DangKyMonHoc.id == values["dang_ky_mon_hoc_id"])
+        .first()
+    )
+    if registration.hoc_ky_id is None or registration.hoc_ky_id != values["hoc_ky_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Học kỳ của lịch học phải trùng với học kỳ của đăng ký môn học.",
+        )
 
 
 def find_conflicts(

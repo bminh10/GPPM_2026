@@ -1,6 +1,7 @@
-import { Button, Card, Flex, Segmented } from 'antd'
+import { Button, Card, Flex } from 'antd'
 import { GlobalOutlined } from '@ant-design/icons'
 import type { Building } from '../../data/campusData'
+import SearchFilterSelect from '../common/SearchFilterSelect'
 
 type Props = {
   buildings: Building[]
@@ -13,11 +14,14 @@ export default function BuildingSelector({ buildings, value, onChange, onReset }
   return (
     <Card className="glass" size="small" styles={{ body: { padding: 8 } }}>
       <Flex vertical gap={8}>
-        <Segmented
-          block
+        <SearchFilterSelect
+          aria-label="Tìm và chọn tòa nhà"
+          placeholder="Tìm và chọn tòa nhà"
           value={value ?? undefined}
-          onChange={(v) => onChange(String(v))}
           options={buildings.map((b) => ({ label: b.name, value: b.id }))}
+          onChange={(buildingId: string | undefined) => {
+            if (buildingId !== undefined) onChange(buildingId)
+          }}
         />
         <Button
           size="small"

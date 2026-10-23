@@ -26,6 +26,16 @@ export default function ProtectedRoute() {
   return status === 'authenticated' ? <Outlet /> : <Navigate to={ROUTE_PATHS.signIn} replace />
 }
 
+export function AdminRoute() {
+  const status = useSessionGate()
+  const { user } = useAuth()
+  if (status === 'loading') return <FullPageSpin />
+  if (status !== 'authenticated') return <Navigate to={ROUTE_PATHS.signIn} replace />
+  return ['admin', 'superadmin'].includes(user?.role?.trim().toLowerCase() ?? '')
+    ? <Outlet />
+    : <Navigate to={ROUTE_PATHS.dashboard} replace />
+}
+
 export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   const status = useSessionGate()
   if (status === 'loading') return <FullPageSpin />
