@@ -1,5 +1,6 @@
 ﻿import { colors } from '../theme/colors'
 import rawData from './campus.geojson.json'
+import { parseRoomLights, type RoomLight } from './roomLighting'
 
 export type LngLat = [number, number]
 
@@ -37,6 +38,7 @@ export type Room = {
   capacity: number
   occupancy: number
   equipment: string[]
+  lights: RoomLight[]
   maintenance?: boolean
 }
 
@@ -117,6 +119,7 @@ export function parseCampusGeoJSON(collection: { features: unknown[] }): CampusD
       capacity: p.capacity as number,
       occupancy: p.occupancy as number,
       equipment: (p.equipment as string[]) ?? [],
+      lights: parseRoomLights(p.lights, String(p.id), polygon),
       maintenance: p.maintenance as boolean | undefined,
     }
   })

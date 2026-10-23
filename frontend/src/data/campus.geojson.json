@@ -75,6 +75,10 @@
       "properties": {
         "kind": "room",
         "id": "A101",
+        "lights": [
+          { "id": "light-1", "name": "Đèn 1", "position": [106.73714, 10.6514174] },
+          { "id": "light-2", "name": "Đèn 2", "position": [106.73723, 10.6514174] }
+        ],
         "code": "A101",
         "name": "Phòng học thông minh",
         "buildingId": "A",

@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Card, Flex, Select, Spin } from 'antd'
+import { Alert, Card, Flex, Select, Spin } from 'antd'
 import CampusMap, { type MapFocus } from '../../components/map/CampusMap'
 import BuildingSelector from '../../components/map/BuildingSelector'
 import FloorSelector from '../../components/map/FloorSelector'
@@ -11,14 +11,23 @@ import { loadCampusDataset, type CampusDataset } from '../../data/campusData'
 export default function Map() {
   const [dataset, setDataset] = useState<CampusDataset | null>(null)
   const [campusId, setCampusId] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [roomLights, setRoomLights] = useState<Record<string, boolean>>({})
+  const toggleRoomLight = useCallback((campusId: string, roomId: string, lightId: string) => {
+    const key = `${campusId}:${roomId}:${lightId}`
+    setRoomLights((previous) => ({ ...previous, [key]: !previous[key] }))
+  }, [])
 
   useEffect(() => {
     loadCampusDataset().then((d) => {
       setDataset(d)
       setCampusId(d.campuses[0]?.id ?? null)
+    }).catch((error: unknown) => {
+      setLoadError(error instanceof Error ? error.message : 'Không thể tải dữ liệu bản đồ')
     })
   }, [])
 
+  if (loadError) return <Alert type="error" title="Lỗi dữ liệu bản đồ" description={loadError} showIcon />
   if (!dataset || !campusId) {
     return (
       <Flex justify="center" align="center" style={{ height: 300 }}>
@@ -33,6 +42,8 @@ export default function Map() {
       dataset={dataset}
       campusId={campusId}
       onChangeCampus={setCampusId}
+      roomLights={roomLights}
+      onToggleRoomLight={toggleRoomLight}
     />
   )
 }
@@ -41,9 +52,11 @@ type ViewProps = {
   dataset: CampusDataset
   campusId: string
   onChangeCampus: (id: string) => void
+  roomLights: Readonly<Record<string, boolean>>
+  onToggleRoomLight: (campusId: string, roomId: string, lightId: string) => void
 }
 
-function CampusView({ dataset, campusId, onChangeCampus }: ViewProps) {
+function CampusView({ dataset, campusId, onChangeCampus, roomLights, onToggleRoomLight }: ViewProps) {
   const campus = dataset.campuses.find((c) => c.id === campusId)!
   const buildings = useMemo(() => dataset.buildings.filter((b) => b.campusId === campusId), [dataset, campusId])
   const rooms = useMemo(() => dataset.rooms.filter((r) => r.campusId === campusId), [dataset, campusId])
@@ -56,6 +69,14 @@ function CampusView({ dataset, campusId, onChangeCampus }: ViewProps) {
 
   const building = buildings.find((b) => b.id === buildingId) ?? null
   const selectedRoom = rooms.find((r) => r.id === roomId) ?? null
+  const isRoomLightOn = useCallback(
+    (id: string, lightId: string) => roomLights[`${campusId}:${id}:${lightId}`] ?? false,
+    [campusId, roomLights],
+  )
+  const toggleLight = useCallback(
+    (id: string, lightId: string) => onToggleRoomLight(campusId, id, lightId),
+    [campusId, onToggleRoomLight],
+  )
 
   const selectRoom = useCallback(
     (id: string) => {
@@ -117,6 +138,8 @@ function CampusView({ dataset, campusId, onChangeCampus }: ViewProps) {
           onSelectRoom={selectRoom}
           onSelectBuilding={selectBuilding}
           onSelectNone={selectNone}
+          isRoomLightOn={isRoomLightOn}
+          onToggleRoomLight={toggleLight}
         />
       </Flex>
 
@@ -155,6 +178,8 @@ function CampusView({ dataset, campusId, onChangeCampus }: ViewProps) {
           <RoomDetailCard
             room={selectedRoom}
             buildingName={building?.name ?? ''}
+            isLightOn={(lightId) => isRoomLightOn(selectedRoom.id, lightId)}
+            onToggleLight={(lightId) => toggleLight(selectedRoom.id, lightId)}
             onClose={() => setRoomId(null)}
           />
         </Flex>
