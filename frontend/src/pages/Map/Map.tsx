@@ -7,16 +7,17 @@ import RoomListPanel from '../../components/map/RoomListPanel'
 import RoomDetailCard from '../../components/map/RoomDetailCard'
 import MapLegend from '../../components/map/MapLegend'
 import { loadCampusDataset, type CampusDataset } from '../../data/campusData'
+import { useRoomLighting } from '../../hooks/useRoomLighting'
+import { lightAddress } from '../../services/LightingService'
+import { useAuth } from '../../store/authStore'
 
 export default function Map() {
   const [dataset, setDataset] = useState<CampusDataset | null>(null)
   const [campusId, setCampusId] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [roomLights, setRoomLights] = useState<Record<string, boolean>>({})
-  const toggleRoomLight = useCallback((campusId: string, roomId: string, lightId: string) => {
-    const key = `${campusId}:${roomId}:${lightId}`
-    setRoomLights((previous) => ({ ...previous, [key]: !previous[key] }))
-  }, [])
+  const lighting = useRoomLighting()
+  const { user } = useAuth()
+  const canControl = ['admin', 'superadmin'].includes(user?.role?.replace(/\s/g, '').toLowerCase() ?? '')
 
   useEffect(() => {
     loadCampusDataset().then((d) => {
@@ -37,14 +38,18 @@ export default function Map() {
   }
 
   return (
+    <Flex vertical gap={8}>
+      {lighting.error && <Alert type="error" showIcon title="Không đồng bộ được đèn" description={lighting.error} />}
+      <Alert type="info" showIcon title="Đèn IoT mô phỏng · Trạng thái chỉ được xác nhận sau khi ESP32 báo về. Thiết bị cần chạy Wokwi." />
     <CampusView
       key={campusId}
       dataset={dataset}
       campusId={campusId}
       onChangeCampus={setCampusId}
-      roomLights={roomLights}
-      onToggleRoomLight={toggleRoomLight}
+      lighting={lighting}
+      canControl={canControl}
     />
+    </Flex>
   )
 }
 
@@ -52,11 +57,11 @@ type ViewProps = {
   dataset: CampusDataset
   campusId: string
   onChangeCampus: (id: string) => void
-  roomLights: Readonly<Record<string, boolean>>
-  onToggleRoomLight: (campusId: string, roomId: string, lightId: string) => void
+  lighting: ReturnType<typeof useRoomLighting>
+  canControl: boolean
 }
 
-function CampusView({ dataset, campusId, onChangeCampus, roomLights, onToggleRoomLight }: ViewProps) {
+function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }: ViewProps) {
   const campus = dataset.campuses.find((c) => c.id === campusId)!
   const buildings = useMemo(() => dataset.buildings.filter((b) => b.campusId === campusId), [dataset, campusId])
   const rooms = useMemo(() => dataset.rooms.filter((r) => r.campusId === campusId), [dataset, campusId])
@@ -70,12 +75,14 @@ function CampusView({ dataset, campusId, onChangeCampus, roomLights, onToggleRoo
   const building = buildings.find((b) => b.id === buildingId) ?? null
   const selectedRoom = rooms.find((r) => r.id === roomId) ?? null
   const isRoomLightOn = useCallback(
-    (id: string, lightId: string) => roomLights[`${campusId}:${id}:${lightId}`] ?? false,
-    [campusId, roomLights],
+    (id: string, lightId: string) => lighting.lights[lightAddress(campusId, id, lightId)]?.reported_on ?? false,
+    [campusId, lighting.lights],
   )
   const toggleLight = useCallback(
-    (id: string, lightId: string) => onToggleRoomLight(campusId, id, lightId),
-    [campusId, onToggleRoomLight],
+    (id: string, lightId: string) => {
+      if (canControl) void lighting.toggle(campusId, id, lightId)
+    },
+    [campusId, canControl, lighting],
   )
 
   const selectRoom = useCallback(
@@ -180,6 +187,9 @@ function CampusView({ dataset, campusId, onChangeCampus, roomLights, onToggleRoo
             buildingName={building?.name ?? ''}
             isLightOn={(lightId) => isRoomLightOn(selectedRoom.id, lightId)}
             onToggleLight={(lightId) => toggleLight(selectedRoom.id, lightId)}
+            getLightStatus={(lightId) => lighting.lights[lightAddress(campusId, selectedRoom.id, lightId)]}
+            isSending={(lightId) => lighting.sending.has(lightAddress(campusId, selectedRoom.id, lightId))}
+            canControl={canControl && !lighting.error}
             onClose={() => setRoomId(null)}
           />
         </Flex>

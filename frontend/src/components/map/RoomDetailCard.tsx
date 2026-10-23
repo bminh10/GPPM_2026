@@ -2,6 +2,7 @@ import { Button, Card, Descriptions, Flex, Progress, Switch, Tag, Typography } f
 import { BulbFilled, CloseOutlined } from '@ant-design/icons'
 import { ROOM_STATE_META, getRoomState, type Room } from '../../data/campusData'
 import { colors } from '../../theme/colors'
+import type { LightStatus } from '../../services/LightingService'
 
 type Props = {
   room: Room
@@ -9,9 +10,14 @@ type Props = {
   onClose: () => void
   isLightOn: (lightId: string) => boolean
   onToggleLight: (lightId: string) => void
+  getLightStatus: (lightId: string) => LightStatus | undefined
+  isSending: (lightId: string) => boolean
+  canControl: boolean
 }
 
-export default function RoomDetailCard({ room, buildingName, onClose, isLightOn, onToggleLight }: Props) {
+export default function RoomDetailCard({
+  room, buildingName, onClose, isLightOn, onToggleLight, getLightStatus, isSending, canControl,
+}: Props) {
   const state = getRoomState(room)
   const meta = ROOM_STATE_META[state]
   const rate = Math.round((room.occupancy / room.capacity) * 100)
@@ -34,6 +40,13 @@ export default function RoomDetailCard({ room, buildingName, onClose, isLightOn,
       )}
       {room.lights.map((light) => {
         const lightOn = isLightOn(light.id)
+        const status = getLightStatus(light.id)
+        const label = !status ? 'Chưa đăng ký thiết bị'
+          : !status.online ? 'Mất kết nối · Trạng thái cuối đã biết'
+          : status.timed_out ? 'Quá hạn xác nhận · Lệnh vẫn đang chờ'
+          : status.pending || isSending(light.id) ? 'Đang chờ thiết bị xác nhận'
+          : status.reported_on === null ? 'Chưa có xác nhận'
+          : 'Đã xác nhận từ ESP32 · Mô phỏng'
         return (
       <Flex
         key={light.id}
@@ -51,13 +64,16 @@ export default function RoomDetailCard({ room, buildingName, onClose, isLightOn,
           <Flex vertical>
             <Typography.Text strong>{light.name} · {room.code}</Typography.Text>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              Mô phỏng web · Chưa kết nối Wokwi
+              {label}
+              {!canControl && ' · Chỉ quản trị viên được điều khiển'}
             </Typography.Text>
           </Flex>
         </Flex>
         <Switch
           aria-label={`${light.name} phòng ${room.code}`}
           checked={lightOn}
+          disabled={!canControl || !status?.online || status.pending || status.reported_on === null}
+          loading={isSending(light.id) || (status?.online && status.pending && !status.timed_out)}
           checkedChildren="Bật"
           unCheckedChildren="Tắt"
           onChange={() => onToggleLight(light.id)}

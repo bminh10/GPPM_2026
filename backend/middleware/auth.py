@@ -11,7 +11,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         # Preflight CORS không mang cookie
-        if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS:
+        device_endpoint = request.method == "POST" and request.url.path in {
+            "/iot/device/connect", "/iot/device/sync",
+        }
+        if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS or device_endpoint:
             return await call_next(request)
 
         user_id = read_user_id(request, "access")

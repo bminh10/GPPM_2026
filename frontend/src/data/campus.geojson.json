@@ -109,6 +109,10 @@
       "properties": {
         "kind": "room",
         "id": "A102",
+        "lights": [
+          { "id": "light-1", "name": "Đèn 1", "position": [106.73735, 10.6514174] },
+          { "id": "light-2", "name": "Đèn 2", "position": [106.73744, 10.6514174] }
+        ],
         "code": "A102",
         "name": "Phòng Lab dữ liệu",
         "buildingId": "A",
