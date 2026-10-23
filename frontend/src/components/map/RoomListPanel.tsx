@@ -24,16 +24,18 @@ export default function RoomListPanel({ rooms: allRooms, buildings, selectedRoom
       size="small"
       title="Danh sách phòng"
       style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
-      styles={{ body: { flex: 1, minHeight: 0, overflowY: 'auto' } }}
+      styles={{
+        body: { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' },
+      }}
     >
-      <Flex vertical gap={8}>
-        <Input
-          allowClear
-          prefix={<SearchOutlined />}
-          placeholder="Tìm phòng theo mã hoặc tên..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+      <Input
+        allowClear
+        prefix={<SearchOutlined />}
+        placeholder="Tìm phòng theo mã hoặc tên..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <Flex vertical gap={8} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {filtered.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có phòng" />}
         {filtered.map((room) => {
           const state = getRoomState(room)

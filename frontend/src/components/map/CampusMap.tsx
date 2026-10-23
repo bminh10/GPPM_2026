@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef } from 'react'
+﻿import { useEffect, useMemo, useRef } from 'react'
 import MapGL, { useControl, type MapRef } from 'react-map-gl/maplibre'
 import { MapboxOverlay, type MapboxOverlayProps } from '@deck.gl/mapbox'
 import { PathLayer, PolygonLayer, TextLayer } from '@deck.gl/layers'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { colors, hexToRgba } from '../../theme/colors'
+import { FONT_FAMILY } from '../../theme/font'
 import {
   ROOM_STATE_META,
   getRoomState,
@@ -147,7 +148,7 @@ export default function CampusMap({
         id: 'campus-name',
         data: [{ position: nameAnchor }],
         characterSet: 'auto',
-        fontFamily: 'Inter, Segoe UI, sans-serif',
+        fontFamily: FONT_FAMILY,
         fontWeight: 700,
         getPosition: (d) => d.position,
         getText: () => campus.name,
@@ -212,7 +213,7 @@ export default function CampusMap({
         id: 'room-labels',
         data: visibleRooms,
         characterSet: 'auto',
-        fontFamily: 'Inter, Segoe UI, sans-serif',
+        fontFamily: FONT_FAMILY,
         fontWeight: 700,
         getPosition: (r) => [...r.center, floorBase + roomElevation(r) + 0.6] as [number, number, number],
         getText: (r) => r.code,
@@ -228,7 +229,7 @@ export default function CampusMap({
         id: 'building-labels',
         data: BUILDINGS,
         characterSet: 'auto',
-        fontFamily: 'Inter, Segoe UI, sans-serif',
+        fontFamily: FONT_FAMILY,
         fontWeight: 700,
         getPosition: (b) => [...b.center, b.floors * b.floorHeight + 4] as [number, number, number],
         getText: (b) => b.name,

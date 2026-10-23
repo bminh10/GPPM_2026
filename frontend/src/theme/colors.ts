@@ -1,4 +1,5 @@
 import type { ThemeConfig } from 'antd'
+import { FONT_FAMILY } from './font'
 
 /**
  * Single Source of Truth cho toàn bộ bảng màu dự án:
@@ -126,7 +127,7 @@ export const antdTheme: ThemeConfig = {
     colorTextBase: colors.text.primary,
     colorBgBase: colors.bg.card,
     borderRadius: 8,
-    fontFamily: "Inter, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+    fontFamily: FONT_FAMILY,
   },
   components: {
     Layout: {
