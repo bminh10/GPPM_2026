@@ -170,21 +170,17 @@ def update_registration(
         values["hoc_ky_id"],
         exclude_id=registration.id,
     )
-    if values["hoc_ky_id"] != registration.hoc_ky_id and (
-        db.query(ThoiKhoaBieu.id)
-        .filter(
-            ThoiKhoaBieu.dang_ky_mon_hoc_id == registration.id,
-            ThoiKhoaBieu.hoc_ky_id != values["hoc_ky_id"],
-        )
-        .first()
-        is not None
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Không thể đổi học kỳ vì đăng ký đã có thời khóa biểu ở học kỳ khác.",
-        )
+    semester_changed = values["hoc_ky_id"] != registration.hoc_ky_id
     for field, value in updates.items():
         setattr(registration, field, value)
+    if semester_changed:
+        schedules = (
+            db.query(ThoiKhoaBieu)
+            .filter(ThoiKhoaBieu.dang_ky_mon_hoc_id == registration.id)
+            .all()
+        )
+        for schedule in schedules:
+            schedule.hoc_ky_id = values["hoc_ky_id"]
     try:
         db.commit()
         db.refresh(registration)

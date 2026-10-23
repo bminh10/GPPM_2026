@@ -8,6 +8,9 @@ from db.database import (
     CaHoc,
     DangKyMonHoc,
     HocKy,
+    Khoa,
+    Lop,
+    Nganh,
     PhongHoc,
     ThoiKhoaBieu,
     get_db,
@@ -160,6 +163,8 @@ def get_schedules(
     semester_id: int | None = None,
     room_id: int | None = None,
     class_id: int | None = None,
+    khoa_id: int | None = None,
+    nganh_id: int | None = None,
     day_of_week: int | None = Query(default=None, ge=2, le=8),
     on_date: date | None = Query(default=None, alias="date"),
     db: Session = Depends(get_db),
@@ -169,8 +174,16 @@ def get_schedules(
         query = query.filter(ThoiKhoaBieu.hoc_ky_id == semester_id)
     if room_id is not None:
         query = query.filter(ThoiKhoaBieu.phong_hoc_id == room_id)
+    if class_id is not None or khoa_id is not None or nganh_id is not None:
+        query = query.join(DangKyMonHoc).join(Lop)
     if class_id is not None:
-        query = query.join(DangKyMonHoc).filter(DangKyMonHoc.lop_id == class_id)
+        query = query.filter(DangKyMonHoc.lop_id == class_id)
+    if khoa_id is not None or nganh_id is not None:
+        query = query.join(Nganh, Lop.nganh_id == Nganh.id)
+    if nganh_id is not None:
+        query = query.filter(Nganh.id == nganh_id)
+    if khoa_id is not None:
+        query = query.join(Khoa, Nganh.khoa_id == Khoa.id).filter(Khoa.id == khoa_id)
     if day_of_week is not None:
         query = query.filter(ThoiKhoaBieu.day_of_week == day_of_week)
     if on_date is not None:
