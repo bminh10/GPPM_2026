@@ -4,7 +4,7 @@ import Dashboard from '../pages/Dashboard/Dashboard'
 import Map from '../pages/Map/Map'
 import Setting from '../pages/Settings/Setting'
 import AuthPage from '../pages/Auth/AuthPage'
-import ProtectedRoute, { AdminRoute, PublicOnlyRoute, RootRedirect } from './ProtectedRoute'
+import ProtectedRoute, { PublicOnlyRoute, RootRedirect } from './ProtectedRoute'
 import { ROUTE_PATHS } from './menuConfig'
 import AdminDataPage from '../pages/AdminData/AdminDataPage'
 import TimetablePage from '../pages/Timetable/TimetablePage'
@@ -27,10 +27,7 @@ export const route = createBrowserRouter([
           { path: ROUTE_PATHS.profile, element: <ProfilePage /> },
           { path: ROUTE_PATHS.settings, element: <Setting /> },
           { path: ROUTE_PATHS.dataManagement, element: <AdminDataPage /> },
-          {
-            element: <AdminRoute />,
-            children: [{ path: ROUTE_PATHS.userManagement, element: <AdminUsersPage /> }],
-          },
+          { path: ROUTE_PATHS.userManagement, element: <AdminUsersPage /> },
         ],
       },
     ],
