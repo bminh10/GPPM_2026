@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import MapGL, { useControl, type MapRef } from 'react-map-gl/maplibre'
 import { MapboxOverlay, type MapboxOverlayProps } from '@deck.gl/mapbox'
-import { PathLayer, PolygonLayer, TextLayer } from '@deck.gl/layers'
+import { IconLayer, PathLayer, PolygonLayer, TextLayer } from '@deck.gl/layers'
+import EnvironmentOutlined from '@ant-design/icons-svg/es/asn/EnvironmentOutlined'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { colors, hexToRgba } from '../../theme/colors'
 import {
@@ -15,6 +16,36 @@ import {
 
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
 const PLATE_THICKNESS = 0.4
+const iconNode = EnvironmentOutlined.icon
+const environmentIconNode =
+  typeof iconNode === 'function' ? iconNode('#000000', '#000000') : iconNode
+
+type IconNode = { tag: string; attrs: Record<string, string>; children?: IconNode[] }
+
+function serializeIconNode(node: IconNode): string {
+  const attrs = Object.entries(node.attrs)
+    .map(([name, value]) => `${name}="${value}"`)
+    .join(' ')
+  const children = node.children
+    ?.map(serializeIconNode)
+    .join('')
+  return `<${node.tag}${attrs ? ` ${attrs}` : ''}>${children ?? ''}</${node.tag}>`
+}
+
+const environmentIconUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="${environmentIconNode.attrs.viewBox}">${environmentIconNode.children
+    ?.map((node) => serializeIconNode(node))
+    .join('')}</svg>`,
+)}`
+const environmentIcon = {
+  id: 'environment',
+  url: environmentIconUrl,
+  width: 24,
+  height: 24,
+  anchorX: 12,
+  anchorY: 24,
+  mask: true,
+}
 
 export type MapFocus = { center: LngLat; key: number; zoom?: number }
 
@@ -54,6 +85,24 @@ export default function CampusMap({
   onSelectNone,
 }: CampusMapProps) {
   const mapRef = useRef<MapRef | null>(null)
+  const [hotspotOffset, setHotspotOffset] = useState(0)
+
+  useEffect(() => {
+    const startedAt = performance.now()
+    let lastUpdate = startedAt
+    let frame = 0
+
+    const animate = (now: number) => {
+      if (now - lastUpdate >= 50) {
+        setHotspotOffset(Math.sin((now - startedAt) / 900) * 0.12)
+        lastUpdate = now
+      }
+      frame = window.requestAnimationFrame(animate)
+    }
+
+    frame = window.requestAnimationFrame(animate)
+    return () => window.cancelAnimationFrame(frame)
+  }, [])
 
   useEffect(() => {
     if (!focus) return
@@ -214,7 +263,8 @@ export default function CampusMap({
         characterSet: 'auto',
         fontFamily: 'Inter, Segoe UI, sans-serif',
         fontWeight: 700,
-        getPosition: (r) => [...r.center, floorBase + roomElevation(r) + 0.6] as [number, number, number],
+        getPosition: (r) =>
+          [...r.center, floorBase + roomElevation(r) + 0.6 + hotspotOffset] as [number, number, number],
         getText: (r) => r.code,
         getSize: 14,
         getColor: hexToRgba(colors.text.primary),
@@ -222,7 +272,24 @@ export default function CampusMap({
         getBackgroundColor: hexToRgba('#ffffff', 235),
         backgroundPadding: [6, 3],
         billboard: true,
-        updateTriggers: { getPosition: [selectedRoomId] },
+        pickable: true,
+        onClick: (info) => info.object && onSelectRoom(info.object.id),
+        updateTriggers: { getPosition: [selectedRoomId, hotspotOffset] },
+      }),
+      new IconLayer({
+        id: 'room-hotspots',
+        data: visibleRooms,
+        getIcon: () => environmentIcon,
+        getPosition: (r) =>
+          [...r.center, floorBase + roomElevation(r) + 0.6 + hotspotOffset] as [number, number, number],
+        getSize: 24,
+        sizeUnits: 'pixels',
+        getColor: hexToRgba(colors.primary.dark),
+        getPixelOffset: [0, -20],
+        billboard: true,
+        pickable: true,
+        onClick: (info) => info.object && onSelectRoom(info.object.id),
+        updateTriggers: { getPosition: [selectedRoomId, hotspotOffset] },
       }),
       new TextLayer({
         id: 'building-labels',
@@ -230,7 +297,8 @@ export default function CampusMap({
         characterSet: 'auto',
         fontFamily: 'Inter, Segoe UI, sans-serif',
         fontWeight: 700,
-        getPosition: (b) => [...b.center, b.floors * b.floorHeight + 4] as [number, number, number],
+        getPosition: (b) =>
+          [...b.center, b.floors * b.floorHeight + 4 + hotspotOffset] as [number, number, number],
         getText: (b) => b.name,
         getSize: 16,
         getColor: hexToRgba('#ffffff'),
@@ -238,9 +306,38 @@ export default function CampusMap({
         getBackgroundColor: hexToRgba(colors.primary.dark, 235),
         backgroundPadding: [8, 4],
         billboard: true,
+        pickable: true,
+        onClick: (info) => info.object && onSelectBuilding(info.object.id),
+        updateTriggers: { getPosition: [hotspotOffset] },
+      }),
+      new IconLayer({
+        id: 'building-hotspots',
+        data: BUILDINGS,
+        getIcon: () => environmentIcon,
+        getPosition: (b) =>
+          [...b.center, b.floors * b.floorHeight + 4 + hotspotOffset] as [number, number, number],
+        getSize: 24,
+        sizeUnits: 'pixels',
+        getColor: hexToRgba(colors.primary.dark),
+        getPixelOffset: [0, -36],
+        billboard: true,
+        pickable: true,
+        onClick: (info) => info.object && onSelectBuilding(info.object.id),
+        updateTriggers: { getPosition: [hotspotOffset] },
       }),
     ]
-  }, [campus, BUILDINGS, ROOMS, selectedBuildingId, selectedFloor, selectedRoomId, onSelectRoom, onSelectBuilding, onSelectNone])
+  }, [
+    campus,
+    BUILDINGS,
+    ROOMS,
+    selectedBuildingId,
+    selectedFloor,
+    selectedRoomId,
+    hotspotOffset,
+    onSelectRoom,
+    onSelectBuilding,
+    onSelectNone,
+  ])
 
   return (
     <MapGL
