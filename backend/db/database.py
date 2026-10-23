@@ -55,6 +55,7 @@ class User(Base):
     pass_word = Column(String)
     email = Column(String)
     role_id = Column(Integer, ForeignKey("role.id"))
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
 
     role = relationship("Role", back_populates="users")
 

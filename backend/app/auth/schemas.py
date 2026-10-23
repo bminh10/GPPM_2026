@@ -39,6 +39,25 @@ class RegisterRequest(BaseModel):
         return value
 
 
+class AdminUserCreateRequest(BaseModel):
+    user_name: str
+    email: str
+    pass_word: str
+    role_id: int
+    is_active: bool = True
+
+    _check_email = field_validator("email")(_validate_email)
+    _check_password = field_validator("pass_word")(_validate_password)
+
+    @field_validator("user_name")
+    @classmethod
+    def _check_user_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Tên không được để trống")
+        return value
+
+
 class LoginRequest(BaseModel):
     email: str
     pass_word: str
@@ -51,6 +70,7 @@ class UserResponse(BaseModel):
     user_name: str
     email: str
     role: str | None
+    is_active: bool
 
     @classmethod
     def from_user(cls, user: User) -> "UserResponse":
@@ -59,6 +79,7 @@ class UserResponse(BaseModel):
             user_name=user.user_name,
             email=user.email,
             role=user.role.name.strip() if user.role else None,
+            is_active=user.is_active,
         )
 
 
@@ -67,6 +88,7 @@ class UserUpdateRequest(BaseModel):
     email: str | None = None
     pass_word: str | None = None
     role_id: int | None = None
+    is_active: bool | None = None
 
     @field_validator("email")
     @classmethod

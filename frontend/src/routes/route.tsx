@@ -8,6 +8,8 @@ import ProtectedRoute, { AdminRoute, PublicOnlyRoute, RootRedirect } from './Pro
 import { ROUTE_PATHS } from './menuConfig'
 import AdminDataPage from '../pages/AdminData/AdminDataPage'
 import TimetablePage from '../pages/Timetable/TimetablePage'
+import ProfilePage from '../pages/Profile/ProfilePage'
+import AdminUsersPage from '../pages/AdminUsers/AdminUsersPage'
 
 export const route = createBrowserRouter([
   { path: '/', element: <RootRedirect /> },
@@ -22,10 +24,14 @@ export const route = createBrowserRouter([
           { path: ROUTE_PATHS.dashboard, element: <Dashboard /> },
           { path: ROUTE_PATHS.map, element: <Map /> },
           { path: ROUTE_PATHS.timetable, element: <TimetablePage /> },
+          { path: ROUTE_PATHS.profile, element: <ProfilePage /> },
           { path: ROUTE_PATHS.settings, element: <Setting /> },
           {
             element: <AdminRoute />,
-            children: [{ path: ROUTE_PATHS.dataManagement, element: <AdminDataPage /> }],
+            children: [
+              { path: ROUTE_PATHS.dataManagement, element: <AdminDataPage /> },
+              { path: ROUTE_PATHS.userManagement, element: <AdminUsersPage /> },
+            ],
           },
         ],
       },

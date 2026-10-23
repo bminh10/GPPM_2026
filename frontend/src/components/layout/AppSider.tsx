@@ -13,8 +13,9 @@ export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const { user } = useAuth()
+  const isAdmin = ['admin', 'superadmin'].includes(user?.role?.trim().toLowerCase() ?? '')
   const visibleMenuItems = menuItems.filter(
-    (item) => item?.key !== '/admin/data' || ['admin', 'superadmin'].includes(user?.role?.trim().toLowerCase() ?? ''),
+    (item) => !['/admin/data', '/admin/users'].includes(String(item?.key)) || isAdmin,
   )
 
   return (

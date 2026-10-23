@@ -1,9 +1,14 @@
-import { Avatar, Descriptions, Flex, Popover, Tag, Typography } from 'antd'
-import { UserOutlined } from '@ant-design/icons'
+import { useState } from 'react'
+import { Avatar, Button, Descriptions, Flex, Popover, Tag, Typography } from 'antd'
+import { UserOutlined, UserSwitchOutlined } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../store/authStore'
+import { ROUTE_PATHS } from '../../routes/menuConfig'
 
 export default function UserMenu() {
   const { user } = useAuth()
+  const [open, setOpen] = useState(false)
+  const navigate = useNavigate()
   if (!user) return null
 
   const content = (
@@ -26,11 +31,29 @@ export default function UserMenu() {
           { key: 'role', label: 'Vai trò', children: <Tag color="blue">{user.role ?? 'Chưa có'}</Tag> },
         ]}
       />
+      <Button
+        type="primary"
+        icon={<UserSwitchOutlined />}
+        block
+        onClick={() => {
+          setOpen(false)
+          navigate(ROUTE_PATHS.profile)
+        }}
+      >
+        Hồ sơ cá nhân
+      </Button>
     </Flex>
   )
 
   return (
-    <Popover content={content} trigger="click" placement="bottomRight" arrow={false}>
+    <Popover
+      content={content}
+      trigger="click"
+      placement="bottomRight"
+      arrow={false}
+      open={open}
+      onOpenChange={setOpen}
+    >
       <Flex align="center" gap={8} style={{ cursor: 'pointer' }}>
         <Typography.Text strong>{user.user_name}</Typography.Text>
         <Avatar icon={<UserOutlined />} style={{ background: 'var(--color-primary)' }} />
