@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.lighting.models import LightingDevice, RoomLight
 from app.lighting.schemas import DeviceReport, LightCommand
+from app.lighting import energy
 
 OFFLINE_SECONDS = int(os.getenv("LIGHTING_OFFLINE_SECONDS", "30"))
 COMMAND_TIMEOUT_SECONDS = int(os.getenv("LIGHTING_COMMAND_TIMEOUT_SECONDS", "30"))
@@ -65,6 +66,11 @@ def connect(db: Session, device: LightingDevice) -> dict:
     device.last_seen = None
     # A reboot must confirm GPIO again, even if the previous session was in sync.
     lights = device_lights(db, device.id)
+    now = time.time()
+    for meter in energy.meters_for_lights(db, lights).values():
+        energy.close_interval(db, meter, now, OFFLINE_SECONDS)
+        meter.on = None
+        meter.confirmed_at = None
     for light in lights:
         light.revision += 1
         light.requested_at = time.time()
@@ -83,6 +89,7 @@ def synchronize(db: Session, device: LightingDevice, report: DeviceReport) -> di
     if any(reports[light.light_id].revision > light.revision for light in lights):
         raise HTTPException(409, "Unknown command revision")
     now = time.time()
+    meters = energy.ensure_meters(db, lights, now)
     for light in lights:
         item = reports[light.light_id]
         # Older acknowledgements cannot overwrite newer web commands.
@@ -95,6 +102,8 @@ def synchronize(db: Session, device: LightingDevice, report: DeviceReport) -> di
         light.acknowledged_revision = light.revision
         # Once acknowledged, a physical button may change the state at this revision.
         light.desired_on = item.on
+        if light.id in meters:
+            energy.record_report(db, meters[light.id], item.on, now, OFFLINE_SECONDS)
     device.sequence = report.sequence
     device.last_seen = now
     response = commands(device, lights)

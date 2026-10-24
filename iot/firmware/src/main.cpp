@@ -137,6 +137,9 @@ void setup() {
 
 void loop() {
   readCommands();
+#ifdef ARDUINO_ARCH_ESP32
+  checkLightingTransport();
+#endif
   const unsigned long now = millis();
   for (size_t i = 0; i < LIGHT_COUNT; ++i) {
     LightState& state = states[i];

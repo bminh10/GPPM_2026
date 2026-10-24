@@ -3,6 +3,7 @@ import { BulbFilled, CloseOutlined } from '@ant-design/icons'
 import { ROOM_STATE_META, getRoomState, type Room } from '../../data/campusData'
 import { colors } from '../../theme/colors'
 import type { LightStatus } from '../../services/LightingService'
+import RoomEnergyPanel from './RoomEnergyPanel'
 
 type Props = {
   room: Room
@@ -81,6 +82,7 @@ export default function RoomDetailCard({
       </Flex>
         )
       })}
+      <RoomEnergyPanel key={`${room.campusId}:${room.id}`} room={room} />
       <Descriptions
         size="small"
         column={1}

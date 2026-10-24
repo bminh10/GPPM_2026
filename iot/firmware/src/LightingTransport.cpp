@@ -1,10 +1,12 @@
 #include "LightingTransport.h"
+#include "HttpResponseBody.h"
 
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <time.h>
+#include <atomic>
 
 #if __has_include("DeviceLocal.h")
 #include "DeviceLocal.h"
@@ -24,13 +26,24 @@ TaskHandle_t networkHandle = nullptr;
 constexpr unsigned long POLL_MS = 1000;
 constexpr unsigned long WIFI_RETRY_MS = 15000;
 unsigned long lastWifiAttempt = 0;
+std::atomic<unsigned long> progressAt{0};
+std::atomic<unsigned long> lastSuccessAt{0};
+std::atomic<bool> hasSuccess{false};
+std::atomic<const char*> phase{"starting"};
+
+void progress(const char* stage) {
+  phase.store(stage);
+  progressAt.store(millis());
+}
 
 int post(const char* path, const String& body, JsonDocument& response) {
   const String base = LIGHTING_API_URL;
-  // The clients must outlive each request for TCP/TLS keep-alive.
-  static WiFiClient plain;
-  static WiFiClientSecure secure;
-  static HTTPClient http;
+  WiFiClient plain;
+  WiFiClientSecure secure;
+  HTTPClient http;
+  progress("opening HTTP connection");
+  // HTTP/1.0 avoids chunked bodies and closes each socket after a bounded read.
+  http.useHTTP10(true);
   const bool tls = base.startsWith("https://");
   if (tls) {
     if (strlen(LIGHTING_ROOT_CA) == 0) {
@@ -52,13 +65,25 @@ int post(const char* path, const String& body, JsonDocument& response) {
   }
   http.setConnectTimeout(5000);
   http.setTimeout(8000);
-  http.setReuse(true);
+  http.setReuse(false);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Device-Id", DEVICE_ID);
   http.addHeader("X-Device-Key", LIGHTING_DEVICE_KEY);
+  progress("waiting for HTTP headers");
   const int status = http.POST(body);
   if (status == 200) {
-    const auto error = deserializeJson(response, http.getString());
+    progress("reading HTTP body");
+    String payload;
+    const BodyResult result = readResponseBody(http.getStream(), http.getSize(), payload);
+    if (result != BodyResult::Complete) {
+      Serial.printf("IoT response body failed (%d); closing socket and retrying\n", static_cast<int>(result));
+      plain.stop();
+      secure.stop();
+      progress("closing HTTP connection");
+      http.end();
+      return -1;
+    }
+    const auto error = deserializeJson(response, payload);
     if (error) {
       Serial.printf("IoT ERROR: invalid JSON response: %s\n", error.c_str());
       plain.stop();
@@ -67,7 +92,6 @@ int post(const char* path, const String& body, JsonDocument& response) {
       return -1;
     }
   } else {
-    if (status > 0) http.getString();
     Serial.printf("IoT request failed: HTTP %d (%s)\n", status,
                   status < 0 ? HTTPClient::errorToString(status).c_str() : "check server response and credentials");
     plain.stop();
@@ -100,6 +124,7 @@ bool applyResponse(JsonDocument& doc, const LightingSnapshot& sent) {
 void networkTask(void*) {
   unsigned long retryMs = POLL_MS;
   for (;;) {
+    progress("checking Wi-Fi");
     if (WiFi.status() != WL_CONNECTED) {
       sessionId = "";
       if (millis() - lastWifiAttempt >= WIFI_RETRY_MS) {
@@ -119,13 +144,17 @@ void networkTask(void*) {
       }
       JsonDocument doc;
       const auto sent = readLighting();
-      if (post("/iot/device/connect", "{}", doc) == 200 && applyResponse(doc, sent)) {
+      const int status = post("/iot/device/connect", "{}", doc);
+      if (status == 200 && applyResponse(doc, sent)) {
         sessionId = doc["session_id"].as<String>();
         sequence = 0;
         retryMs = POLL_MS;
         Serial.println("IoT connected; reporting GPIO state");
+        hasSuccess.store(true);
+        lastSuccessAt.store(millis());
         continue;
       }
+      if (status == 200) Serial.println("IoT ERROR: invalid connect response");
     } else {
       const auto sent = readLighting();
       JsonDocument request, response;
@@ -142,6 +171,8 @@ void networkTask(void*) {
       serializeJson(request, body);
       const int status = post("/iot/device/sync", body, response);
       if (status == 200 && applyResponse(response, sent)) {
+        hasSuccess.store(true);
+        lastSuccessAt.store(millis());
         retryMs = POLL_MS;
         // Confirm applied commands or in-flight button changes without another poll delay.
         if (!lightingNeedsReport(readLighting(), sent)) {
@@ -165,6 +196,7 @@ void startLightingTransport(ReadLighting read, ApplyLighting apply) {
   }
   readLighting = read;
   applyLighting = apply;
+  progress("starting Wi-Fi");
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   lastWifiAttempt = millis();
@@ -177,4 +209,29 @@ void startLightingTransport(ReadLighting read, ApplyLighting apply) {
 
 void notifyLightingChanged() {
   if (networkHandle != nullptr) xTaskNotifyGive(networkHandle);
+}
+
+void checkLightingTransport() {
+  if (networkHandle == nullptr) return;
+  static unsigned long loggedAt = 0;
+  const unsigned long lastProgress = progressAt.load();
+  const unsigned long lastSuccess = lastSuccessAt.load();
+  const unsigned long now = millis();
+  const unsigned long elapsed = now - lastProgress;
+  if (now - loggedAt >= 15000) {
+    loggedAt = now;
+    if (hasSuccess.load()) {
+      Serial.printf("IoT health: uptime_ms=%lu WiFi=%d stage=%s stage_age_ms=%lu last_response_age_ms=%lu heap=%u\n",
+                    now, static_cast<int>(WiFi.status()), phase.load(), elapsed,
+                    now - lastSuccess, ESP.getFreeHeap());
+    } else {
+      Serial.printf("IoT health: uptime_ms=%lu WiFi=%d stage=%s stage_age_ms=%lu no_successful_response heap=%u\n",
+                    now, static_cast<int>(WiFi.status()), phase.load(), elapsed, ESP.getFreeHeap());
+    }
+  }
+  if (lightingTransportStalled(now, lastProgress) && progressAt.load() == lastProgress) {
+    Serial.printf("IoT ERROR: network task stalled in %s for at least 60s; restarting board to recover\n", phase.load());
+    Serial.flush();
+    ESP.restart();
+  }
 }

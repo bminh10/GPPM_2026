@@ -2,8 +2,11 @@
 import argparse
 import hashlib
 import os
+import time
 
-from app.lighting.models import LightingDevice, RoomLight
+from app.lighting import energy
+from app.lighting.models import LightingDevice, RoomLight, LightEnergyMeter, LightEnergyInterval
+from app.lighting.service import OFFLINE_SECONDS
 from db.database import SessionLocal, engine
 
 
@@ -26,8 +29,10 @@ def main() -> None:
 
     LightingDevice.__table__.create(engine, checkfirst=True)
     RoomLight.__table__.create(engine, checkfirst=True)
+    LightEnergyMeter.__table__.create(engine, checkfirst=True)
+    LightEnergyInterval.__table__.create(engine, checkfirst=True)
     with SessionLocal.begin() as db:
-        device = db.get(LightingDevice, args.device)
+        device = db.query(LightingDevice).filter_by(id=args.device).with_for_update().first()
         if device is None:
             device = LightingDevice(
                 id=args.device, campus_id=args.campus, room_id=args.room,
@@ -37,6 +42,12 @@ def main() -> None:
             db.flush()
         elif (device.campus_id, device.room_id) != (args.campus, args.room):
             parser.error("Existing device has a different room; provision a new device ID")
+        for meter in energy.meters_for_lights(
+            db, db.query(RoomLight).filter_by(device_id=device.id).all(),
+        ).values():
+            energy.close_interval(db, meter, time.time(), OFFLINE_SECONDS)
+            meter.on = None
+            meter.confirmed_at = None
         device.key_hash = hashlib.sha256(key.encode()).hexdigest()
         device.session_id = None
         device.last_seen = None
@@ -48,6 +59,8 @@ def main() -> None:
                 parser.error(f"Light {light_id} already belongs to a different device")
             if light is None:
                 db.add(RoomLight(device_id=args.device, campus_id=args.campus, room_id=args.room, light_id=light_id))
+        db.flush()
+        energy.ensure_meters(db, db.query(RoomLight).filter_by(device_id=device.id).all(), time.time())
         print(f"Provisioned {args.device}; credential stored as SHA-256 digest. No keys printed.")
 
 

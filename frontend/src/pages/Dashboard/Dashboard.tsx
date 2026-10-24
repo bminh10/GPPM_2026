@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Button,
@@ -21,14 +21,10 @@ import {
   TeamOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
-import { BarChart, HeatmapChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, VisualMapComponent } from 'echarts/components'
-import { init, use as registerEChartsModules } from 'echarts/core'
-import type { ECharts, EChartsCoreOption } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
+import type { EChartsCoreOption } from 'echarts/core'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
-
-registerEChartsModules([BarChart, HeatmapChart, GridComponent, TooltipComponent, VisualMapComponent, CanvasRenderer])
+import EChart from '../../components/charts/EChart'
+import EnergyDashboard from '../../components/energy/EnergyDashboard'
 
 type RoomUtilization = {
   room_id: number
@@ -364,6 +360,8 @@ export default function Dashboard() {
         </Button>
       </Flex>
 
+      <EnergyDashboard />
+
       <Card size="small">
         <Space wrap style={{ width: '100%' }} size={[12, 12]}>
           <Select
@@ -577,30 +575,4 @@ export default function Dashboard() {
       </Spin>
     </Flex>
   )
-}
-
-function EChart({ option }: { option: EChartsCoreOption }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<ECharts | null>(null)
-
-  useEffect(() => {
-    if (!containerRef.current) return
-
-    const chart = init(containerRef.current)
-    chartRef.current = chart
-    const observer = new ResizeObserver(() => chart.resize())
-    observer.observe(containerRef.current)
-
-    return () => {
-      observer.disconnect()
-      chart.dispose()
-      chartRef.current = null
-    }
-  }, [])
-
-  useEffect(() => {
-    chartRef.current?.setOption(option, { notMerge: true })
-  }, [option])
-
-  return <div ref={containerRef} style={{ width: '100%', height: 350 }} />
 }

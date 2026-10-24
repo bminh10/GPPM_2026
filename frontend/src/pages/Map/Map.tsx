@@ -181,7 +181,7 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
       )}
 
       {selectedRoom && (
-        <Flex style={{ position: 'absolute', right: 84, bottom: 16, width: 320, zIndex: 2 }}>
+        <Flex style={{ position: 'absolute', right: 84, bottom: 16, width: 350, maxHeight: 'calc(100% - 32px)', overflowY: 'auto', zIndex: 2 }}>
           <RoomDetailCard
             room={selectedRoom}
             buildingName={building?.name ?? ''}

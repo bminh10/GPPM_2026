@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+using String = std::string;
 
 constexpr int HIGH = 1;
 constexpr int LOW = 0;

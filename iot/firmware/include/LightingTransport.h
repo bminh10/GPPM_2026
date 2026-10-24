@@ -21,3 +21,9 @@ inline bool lightingNeedsReport(const LightingSnapshot& current, const LightingS
 
 void startLightingTransport(ReadLighting read, ApplyLighting apply);
 void notifyLightingChanged();
+void checkLightingTransport();
+
+constexpr unsigned long NETWORK_STALL_MS = 60000;
+inline bool lightingTransportStalled(unsigned long now, unsigned long progressAt) {
+  return now - progressAt >= NETWORK_STALL_MS;
+}

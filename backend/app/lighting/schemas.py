@@ -6,6 +6,12 @@ class LightCommand(BaseModel):
     expected_revision: int = Field(ge=0)
 
 
+class LightPowerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    watts: float = Field(gt=0, le=10000, allow_inf_nan=False, strict=True)
+
+
 class LightReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

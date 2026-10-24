@@ -13,8 +13,56 @@ int outputs[40];
 MockSerial Serial;
 
 #include "../../src/main.cpp"
+#include "HttpResponseBody.h"
+
+struct BodyClient {
+  std::string data;
+  bool open;
+  BodyClient(const std::string& content, bool connected) : data(content), open(connected) {}
+  int available() const { return static_cast<int>(data.size()); }
+  bool connected() const { return open; }
+  int read() {
+    const unsigned char value = data.front();
+    data.erase(0, 1);
+    return value;
+  }
+};
 
 int main() {
+  assert(!lightingTransportStalled(59999, 0));
+  assert(lightingTransportStalled(60000, 0));
+  assert(!lightingTransportStalled(65000, 64000));
+  const unsigned long nearWrap = ~0UL - 100;
+  assert(!lightingTransportStalled(50, nearWrap));
+  assert(lightingTransportStalled(60000, nearWrap));
+  {
+    String body;
+    BodyClient client{"{}", true};
+    assert(readResponseBody(client, 2, body) == BodyResult::Complete);
+    assert(body == "{}");
+    body.clear();
+    client = {"{", true};
+    const auto start = millis();
+    assert(readResponseBody(client, 2, body) == BodyResult::Timeout);
+    assert(millis() - start == BODY_TIMEOUT_MS);
+    body.clear();
+    client = {"{", false};
+    assert(readResponseBody(client, 2, body) == BodyResult::Truncated);
+    body.clear();
+    client = {"{}", false};
+    assert(readResponseBody(client, -1, body) == BodyResult::Complete);
+    body.clear();
+    client = {"", true};
+    assert(readResponseBody(client, MAX_BODY_BYTES + 1, body) == BodyResult::TooLarge);
+    client = {std::string(MAX_BODY_BYTES + 1, 'x'), true};
+    assert(readResponseBody(client, -1, body) == BodyResult::TooLarge);
+    body.clear();
+    client = {"", true};
+    assert(readResponseBody(client, 0, body) == BodyResult::Complete);
+    body.clear();
+    client = {"{}", true};
+    assert(readResponseBody(client, 2, body) == BodyResult::Complete);
+  }
   std::fill(inputs, inputs + 40, HIGH);
   setup();
   assert(outputs[18] == LOW && outputs[19] == LOW);
@@ -103,5 +151,5 @@ int main() {
 
   std::cout << "PASS: initial off, independent lights, serial commands, invalid input, "
                "debounce, held presses, remote revisions, immediate report detection "
-               "and in-flight button events\n";
+               "in-flight button events, bounded HTTP body recovery and network stall detection\n";
 }
