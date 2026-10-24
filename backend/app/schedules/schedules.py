@@ -4,10 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.auth.dependencies import get_current_user
+from core.redis_cache import invalidate_cache_prefix
+from app.subjects.subject_rules import determine_is_thuc_hanh
 from db.database import (
     CaHoc,
     DangKyMonHoc,
     HocKy,
+    Khoa,
+    Lop,
+    MonHoc,
+    Nganh,
     PhongHoc,
     ThoiKhoaBieu,
     get_db,
@@ -79,11 +86,42 @@ def _validate_references(db: Session, values: dict) -> None:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Không tìm thấy {label} (id={values[field]}).",
             )
-    room = db.query(PhongHoc).filter(PhongHoc.id == values["phong_hoc_id"]).first()
-    if values.get("is_thuc_hanh", False) and not room.is_thuc_hanh:
+    time_slot = db.query(CaHoc).filter(CaHoc.id == values["ca_hoc_id"]).first()
+    if time_slot.start_time >= time_slot.end_time:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Lịch thực hành phải được xếp vào phòng được đánh dấu là phòng thực hành.",
+            detail="Ca học có khung giờ không hợp lệ.",
+        )
+    room = db.query(PhongHoc).filter(PhongHoc.id == values["phong_hoc_id"]).first()
+    if room.is_thuc_hanh != values.get("is_thuc_hanh", False):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Loại phòng phải khớp với loại buổi học: lý thuyết dùng phòng thường, "
+                "thực hành dùng phòng thực hành."
+            ),
+        )
+    registration = (
+        db.query(DangKyMonHoc)
+        .filter(DangKyMonHoc.id == values["dang_ky_mon_hoc_id"])
+        .first()
+    )
+    subject = (
+        db.query(MonHoc)
+        .filter(MonHoc.id == registration.mon_id)
+        .first()
+    )
+    if values.get("is_thuc_hanh", False) and not (
+        subject.is_thuc_hanh or determine_is_thuc_hanh(subject.code)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Môn học chưa được cấu hình có buổi thực hành.",
+        )
+    if registration.hoc_ky_id is None or registration.hoc_ky_id != values["hoc_ky_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Học kỳ của lịch học phải trùng với học kỳ của đăng ký môn học.",
         )
 
 
@@ -150,6 +188,8 @@ def get_schedules(
     semester_id: int | None = None,
     room_id: int | None = None,
     class_id: int | None = None,
+    khoa_id: int | None = None,
+    nganh_id: int | None = None,
     day_of_week: int | None = Query(default=None, ge=2, le=8),
     on_date: date | None = Query(default=None, alias="date"),
     db: Session = Depends(get_db),
@@ -159,8 +199,16 @@ def get_schedules(
         query = query.filter(ThoiKhoaBieu.hoc_ky_id == semester_id)
     if room_id is not None:
         query = query.filter(ThoiKhoaBieu.phong_hoc_id == room_id)
+    if class_id is not None or khoa_id is not None or nganh_id is not None:
+        query = query.join(DangKyMonHoc).join(Lop)
     if class_id is not None:
-        query = query.join(DangKyMonHoc).filter(DangKyMonHoc.lop_id == class_id)
+        query = query.filter(DangKyMonHoc.lop_id == class_id)
+    if khoa_id is not None or nganh_id is not None:
+        query = query.join(Nganh, Lop.nganh_id == Nganh.id)
+    if nganh_id is not None:
+        query = query.filter(Nganh.id == nganh_id)
+    if khoa_id is not None:
+        query = query.join(Khoa, Nganh.khoa_id == Khoa.id).filter(Khoa.id == khoa_id)
     if day_of_week is not None:
         query = query.filter(ThoiKhoaBieu.day_of_week == day_of_week)
     if on_date is not None:
@@ -181,7 +229,11 @@ def get_schedule(schedule_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=ScheduleResponse, status_code=status.HTTP_201_CREATED)
-def create_schedule(data: ScheduleData, db: Session = Depends(get_db)):
+def create_schedule(
+    data: ScheduleData,
+    _: object = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     values = _validated_data(db, data)
     conflicts = find_conflicts(db, values)
     if conflicts:
@@ -189,13 +241,16 @@ def create_schedule(data: ScheduleData, db: Session = Depends(get_db)):
             status_code=status.HTTP_409_CONFLICT,
             detail={"message": "Lịch học bị trùng.", "conflicts": conflicts},
         )
-    return commit_db(ThoiKhoaBieu(**values), db)
+    schedule = commit_db(ThoiKhoaBieu(**values), db)
+    invalidate_cache_prefix("analytics:")
+    return schedule
 
 
 @router.patch("/{schedule_id}", response_model=ScheduleResponse)
 def update_schedule(
     schedule_id: int,
     data: ScheduleUpdate,
+    _: object = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     schedule = db.query(ThoiKhoaBieu).filter(ThoiKhoaBieu.id == schedule_id).first()
@@ -238,20 +293,30 @@ def update_schedule(
         setattr(schedule, field, value)
     db.commit()
     db.refresh(schedule)
+    invalidate_cache_prefix("analytics:")
     return schedule
 
 
 @router.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
+def delete_schedule(
+    schedule_id: int,
+    _: object = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     schedule = db.query(ThoiKhoaBieu).filter(ThoiKhoaBieu.id == schedule_id).first()
     if schedule is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch học.")
     db.delete(schedule)
     db.commit()
+    invalidate_cache_prefix("analytics:")
 
 
 @router.post("/check-conflicts")
-def check_schedule_conflicts(data: ScheduleData, db: Session = Depends(get_db)):
+def check_schedule_conflicts(
+    data: ScheduleData,
+    _: object = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     values = _validated_data(db, data)
     conflicts = find_conflicts(db, values)
     return {"has_conflict": bool(conflicts), "conflicts": conflicts}

@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Card, Flex, Select, Spin } from 'antd'
+import { Alert, Card, Flex, Spin } from 'antd'
 import CampusMap, { type MapFocus } from '../../components/map/CampusMap'
 import BuildingSelector from '../../components/map/BuildingSelector'
 import FloorSelector from '../../components/map/FloorSelector'
@@ -10,6 +10,7 @@ import { loadCampusDataset, type CampusDataset } from '../../data/campusData'
 import { useRoomLighting } from '../../hooks/useRoomLighting'
 import { lightAddress } from '../../services/LightingService'
 import { useAuth } from '../../store/authStore'
+import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 
 export default function Map() {
   const [dataset, setDataset] = useState<CampusDataset | null>(null)
@@ -157,7 +158,7 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
       >
         {dataset.campuses.length > 1 && (
           <Card className="glass" size="small" styles={{ body: { padding: 8 } }}>
-            <Select
+            <SearchFilterSelect
               style={{ width: '100%' }}
               value={campusId}
               onChange={onChangeCampus}

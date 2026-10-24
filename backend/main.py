@@ -11,7 +11,6 @@ from app.optimization.optimization import router as routerOptimization
 from app.registrations.registrations import router as routerRegistrations
 from app.resources.resources import router as routerResources
 from app.rooms.rooms import router as routerRooms
-from app.classes.classes import router as routerClasses
 from app.faculty.faculty import router as routerFaculties
 from app.schedules.schedules import router as routerSchedules
 from app.semesters.semesters import router as routerSemesters
@@ -29,6 +28,7 @@ for router in (
     routerAuth,
     routerUsers,
     routerCampus,
+    routerFaculties,
     routerMajors,
     routerClasses,
     routerRooms,

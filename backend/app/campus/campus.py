@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from db.database import get_db, Campus
+
+from db.database import Campus, PhongHoc, get_db
 from utils.commit import commit_db
 from typing import Optional
 
@@ -12,6 +13,8 @@ class CampusData(BaseModel):
     address: str
     
 class CampusResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     address: str
@@ -38,14 +41,7 @@ def create_campus(data: CampusData, db: Session = Depends(get_db)):
     
 @router.get("/all", response_model=list[CampusResponse])
 def get_all_campus(db: Session = Depends(get_db)):
-    campus = db.query(Campus).all()
-    
-    if not campus:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Empty!"
-        )
-    return campus
+    return db.query(Campus).order_by(Campus.id).all()
 
 @router.get("/{id}", response_model=CampusResponse)
 def get_campus_byId(id: int, db: Session = Depends(get_db)):
@@ -76,3 +72,20 @@ def refactor_campus(id: int, data: CampusUpdate, db: Session = Depends(get_db)):
     db.refresh(campus)
     
     return campus
+
+
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_campus(id: int, db: Session = Depends(get_db)):
+    campus = db.query(Campus).filter(Campus.id == id).first()
+    if campus is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Campus not found",
+        )
+    if db.query(PhongHoc).filter(PhongHoc.campus_id == id).first() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a campus that still has rooms",
+        )
+    db.delete(campus)
+    db.commit()

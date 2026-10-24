@@ -106,8 +106,8 @@ class LightingTests(unittest.TestCase):
             response = self.command(True, state["lights"][0]["revision"])
             self.assertEqual(response.status_code, 200)
             self.assertTrue(response.json()["pending"])
-            # User/role, target lookup, then device/light locks; no post-commit refresh.
-            self.assertEqual(sum(sql.startswith("SELECT") for sql in statements), 5)
+            # Active-user middleware, user/role, target, device/light locks; no post-commit refresh.
+            self.assertEqual(sum(sql.startswith("SELECT") for sql in statements), 6)
         finally:
             event.remove(engine, "before_cursor_execute", record)
 

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Card, Empty, Flex, Input, Progress, Tag, Typography } from 'antd'
-import { SearchOutlined } from '@ant-design/icons'
+import { Card, Empty, Flex, Progress, Tag, Typography } from 'antd'
 import { ROOM_STATE_META, getRoomState, type Building, type Room } from '../../data/campusData'
+import SearchInput from '../common/SearchInput'
 
 type Props = {
   rooms: Room[]
@@ -28,12 +28,10 @@ export default function RoomListPanel({ rooms: allRooms, buildings, selectedRoom
         body: { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' },
       }}
     >
-      <Input
-        allowClear
-        prefix={<SearchOutlined />}
+      <SearchInput
         placeholder="Tìm phòng theo mã hoặc tên..."
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={setQuery}
       />
       <Flex vertical gap={8} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {filtered.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có phòng" />}

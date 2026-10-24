@@ -3,6 +3,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from db.database import DangKyMonHoc, MonHoc, get_db
+from app.subjects.subject_rules import determine_is_thuc_hanh
 from utils.commit import commit_db
 
 router = APIRouter(prefix="/subjects", tags=["Subjects"])
@@ -12,12 +13,14 @@ class SubjectData(BaseModel):
     code: str
     name: str
     credits: int = Field(default=3, gt=0)
+    is_thuc_hanh: bool | None = None
 
 
 class SubjectUpdate(BaseModel):
     code: str | None = None
     name: str | None = None
     credits: int | None = Field(default=None, gt=0)
+    is_thuc_hanh: bool | None = None
 
 
 class SubjectResponse(BaseModel):
@@ -27,6 +30,7 @@ class SubjectResponse(BaseModel):
     code: str
     name: str
     credits: int
+    is_thuc_hanh: bool
 
 
 def require_available_code(code: str, db: Session, subject_id: int | None = None) -> None:
@@ -59,7 +63,14 @@ def get_subject(id: int, db: Session = Depends(get_db)):
 @router.post("", response_model=SubjectResponse, status_code=status.HTTP_201_CREATED)
 def create_subject(data: SubjectData, db: Session = Depends(get_db)):
     require_available_code(data.code, db)
-    subject = MonHoc(**data.model_dump())
+    subject = MonHoc(
+        **data.model_dump(exclude={"is_thuc_hanh"}),
+        is_thuc_hanh=(
+            determine_is_thuc_hanh(data.code)
+            if data.is_thuc_hanh is None
+            else data.is_thuc_hanh
+        ),
+    )
     return commit_db(subject, db)
 
 
@@ -75,14 +86,16 @@ def update_subject(id: int, data: SubjectUpdate, db: Session = Depends(get_db)):
     update_data = data.model_dump(exclude_unset=True)
     if any(
         field in update_data and update_data[field] is None
-        for field in ("code", "name", "credits")
+        for field in ("code", "name", "credits", "is_thuc_hanh")
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Subject code, name, and credits cannot be null",
+            detail="Subject fields cannot be null",
         )
     if "code" in update_data and update_data["code"] is not None:
         require_available_code(update_data["code"], db, subject.id)
+        if "is_thuc_hanh" not in update_data:
+            subject.is_thuc_hanh = determine_is_thuc_hanh(update_data["code"])
     for field, value in update_data.items():
         setattr(subject, field, value)
 

@@ -7,7 +7,9 @@ import { CanvasRenderer } from 'echarts/renderers'
 
 registerEChartsModules([BarChart, HeatmapChart, GridComponent, LegendComponent, TooltipComponent, VisualMapComponent, CanvasRenderer])
 
-export default function EChart({ option, label = 'Biểu đồ phân tích' }: { option: EChartsCoreOption; label?: string }) {
+export default function EChart({ option, label = 'Biểu đồ phân tích', height = 350 }: {
+  option: EChartsCoreOption; label?: string; height?: number
+}) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<ECharts | null>(null)
 
@@ -28,5 +30,5 @@ export default function EChart({ option, label = 'Biểu đồ phân tích' }: {
     chartRef.current?.setOption(option, { notMerge: true })
   }, [option])
 
-  return <div ref={containerRef} role="img" aria-label={label} style={{ width: '100%', height: 350 }} />
+  return <div ref={containerRef} role="img" aria-label={label} style={{ width: '100%', height }} />
 }

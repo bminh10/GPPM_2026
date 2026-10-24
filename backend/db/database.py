@@ -55,6 +55,7 @@ class User(Base):
     pass_word = Column(String)
     email = Column(String)
     role_id = Column(Integer, ForeignKey("role.id"))
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
 
     role = relationship("Role", back_populates="users")
 
@@ -124,6 +125,12 @@ class MonHoc(Base):
     code = Column(String, nullable=False, unique=True)
     name = Column(String, nullable=False)
     credits = Column(Integer, default=3)
+    is_thuc_hanh = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
 
     __table_args__ = (CheckConstraint("credits > 0", name="mon_hoc_credits_check"),)
 
@@ -137,14 +144,21 @@ class DangKyMonHoc(Base):
     lop_id = Column(Integer, ForeignKey("lop.id"), nullable=False)
     mon_id = Column(Integer, ForeignKey("mon_hoc.id"), nullable=False)
     so_luong = Column(Integer, nullable=False, default=0)
+    hoc_ky_id = Column(Integer, ForeignKey("hoc_ky.id"), nullable=True)
 
     __table_args__ = (
         CheckConstraint("so_luong >= 0", name="dang_ky_mon_hoc_so_luong_check"),
-        UniqueConstraint("lop_id", "mon_id", name="dang_ky_mon_hoc_lop_mon_unique"),
+        UniqueConstraint(
+            "lop_id",
+            "mon_id",
+            "hoc_ky_id",
+            name="dang_ky_mon_hoc_lop_mon_hoc_ky_unique",
+        ),
     )
 
     lop = relationship("Lop", back_populates="dang_ky_mon_hocs")
     mon_hoc = relationship("MonHoc", back_populates="dang_ky_mon_hocs")
+    hoc_ky = relationship("HocKy", back_populates="dang_ky_mon_hocs")
     thoi_khoa_bieus = relationship("ThoiKhoaBieu", back_populates="dang_ky_mon_hoc")
 
 
@@ -156,6 +170,7 @@ class HocKy(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
 
+    dang_ky_mon_hocs = relationship("DangKyMonHoc", back_populates="hoc_ky")
     thoi_khoa_bieus = relationship("ThoiKhoaBieu", back_populates="hoc_ky")
 
 

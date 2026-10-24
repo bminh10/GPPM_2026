@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Alert,
   Button,
@@ -7,16 +7,16 @@ import {
   Empty,
   Flex,
   Row,
-  Select,
   Space,
   Spin,
   Statistic,
-  Table,
   Typography,
 } from 'antd'
 import {
   ApartmentOutlined,
-  ReloadOutlined,
+  BarChartOutlined,
+  CalendarOutlined,
+  FilterOutlined,
   ScheduleOutlined,
   TeamOutlined,
   WarningOutlined,
@@ -25,6 +25,10 @@ import type { EChartsCoreOption } from 'echarts/core'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
 import EChart from '../../components/charts/EChart'
 import EnergyDashboard from '../../components/energy/EnergyDashboard'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import SearchFilterSelect from '../../components/common/SearchFilterSelect'
+import SearchableTable from '../../components/common/SearchableTable'
+import './Dashboard.css'
 
 type RoomUtilization = {
   room_id: number
@@ -67,6 +71,11 @@ type WeekOption = { start_date: string; end_date: string; label: string }
 type CampusOption = { id: number; name: string }
 type RoomOption = { id: number; building: string | null; campus_id: number }
 
+const EMPTY_MAJORS: MajorOption[] = []
+const EMPTY_CLASSES: ClassOption[] = []
+const EMPTY_SEMESTERS: SemesterOption[] = []
+const EMPTY_CAMPUSES: CampusOption[] = []
+const EMPTY_ROOMS: RoomOption[] = []
 const dayNames = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']
 
 function formatDate(value: string) {
@@ -105,76 +114,59 @@ function getWeeks(semester: SemesterOption | undefined): WeekOption[] {
 }
 
 export default function Dashboard() {
-  const [utilization, setUtilization] = useState<RoomUtilizationResponse | null>(null)
-  const [demand, setDemand] = useState<RoomDemandResponse | null>(null)
-  const [underutilized, setUnderutilized] = useState<UnderutilizedRoomsResponse | null>(null)
-  const [majors, setMajors] = useState<MajorOption[]>([])
-  const [classes, setClasses] = useState<ClassOption[]>([])
-  const [semesters, setSemesters] = useState<SemesterOption[]>([])
-  const [campuses, setCampuses] = useState<CampusOption[]>([])
-  const [rooms, setRooms] = useState<RoomOption[]>([])
+  const queryClient = useQueryClient()
   const [filters, setFilters] = useState<{
     majorId: number | null
     classId: number | null
     semesterId: number | null
     week: WeekOption | null
-    campusId: number | null
+    campusId: number | null | undefined
     building: string | null
-  }>({ majorId: null, classId: null, semesterId: null, week: null, campusId: null, building: null })
-  const [loading, setLoading] = useState(true)
-  const [filtersLoading, setFiltersLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [filtersError, setFiltersError] = useState<string | null>(null)
-  const [refreshKey, setRefreshKey] = useState(0)
+  }>({ majorId: null, classId: null, semesterId: null, week: null, campusId: undefined, building: null })
+  const referencesQuery = useQuery({
+    queryKey: ['dashboard', 'references'],
+    queryFn: async () => {
+      const [majorsResponse, classesResponse, semestersResponse, campusesResponse, roomsResponse] =
+        await Promise.all([
+          apiClient.get<MajorOption[]>('/majors'),
+          apiClient.get<ClassOption[]>('/classes'),
+          apiClient.get<SemesterOption[]>('/semesters'),
+          apiClient.get<CampusOption[]>('/campus/all'),
+          apiClient.get<RoomOption[]>('/rooms'),
+        ])
+      return {
+        majors: majorsResponse.data,
+        classes: classesResponse.data,
+        semesters: semestersResponse.data,
+        campuses: campusesResponse.data,
+        rooms: roomsResponse.data,
+      }
+    },
+  })
+  const majors = referencesQuery.data?.majors ?? EMPTY_MAJORS
+  const classes = referencesQuery.data?.classes ?? EMPTY_CLASSES
+  const semesters = referencesQuery.data?.semesters ?? EMPTY_SEMESTERS
+  const campuses = referencesQuery.data?.campuses ?? EMPTY_CAMPUSES
+  const rooms = referencesQuery.data?.rooms ?? EMPTY_ROOMS
+  const filtersLoading = referencesQuery.isLoading
+  const filtersError = referencesQuery.error
+    ? getErrorMessage(referencesQuery.error)
+    : null
 
-  useEffect(() => {
-    let active = true
-
-    Promise.all([
-      apiClient.get<MajorOption[]>('/majors'),
-      apiClient.get<ClassOption[]>('/classes'),
-      apiClient.get<SemesterOption[]>('/semesters'),
-      apiClient.get<CampusOption[]>('/campus/all'),
-      apiClient.get<RoomOption[]>('/rooms'),
-    ])
-      .then(([majorsResponse, classesResponse, semestersResponse, campusesResponse, roomsResponse]) => {
-        if (!active) return
-        setMajors(majorsResponse.data)
-        setClasses(classesResponse.data)
-        setSemesters(semestersResponse.data)
-        setCampuses(campusesResponse.data)
-        setRooms(roomsResponse.data)
-        const campusesWithRooms = campusesResponse.data.filter((campus) =>
-          roomsResponse.data.some((room) => room.campus_id === campus.id),
-        )
-        setFilters((current) => ({
-          ...current,
-          campusId: campusesWithRooms[0]?.id ?? null,
-        }))
-      })
-      .catch((requestError: unknown) => {
-        if (active) setFiltersError(getErrorMessage(requestError))
-      })
-      .finally(() => {
-        if (active) setFiltersLoading(false)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  const selectedSemester = semesters.find((semester) => semester.id === filters.semesterId)
   const campusesWithRooms = useMemo(
     () => campuses.filter((campus) => rooms.some((room) => room.campus_id === campus.id)),
     [campuses, rooms],
   )
+  const campusId = filters.campusId === undefined
+    ? campusesWithRooms[0]?.id ?? null
+    : filters.campusId
+  const selectedSemester = semesters.find((semester) => semester.id === filters.semesterId)
   const availableBuildings = useMemo(
     () => [...new Set(rooms
-      .filter((room) => filters.campusId === null || room.campus_id === filters.campusId)
+      .filter((room) => campusId === null || room.campus_id === campusId)
       .map((room) => room.building)
       .filter((building): building is string => Boolean(building)))].sort(),
-    [filters.campusId, rooms],
+    [campusId, rooms],
   )
   const weeks = useMemo(() => getWeeks(selectedSemester), [selectedSemester])
   const availableClasses = useMemo(
@@ -186,50 +178,42 @@ export default function Dashboard() {
     ...(filters.classId !== null ? { lop_id: filters.classId } : {}),
     ...(filters.majorId !== null ? { nganh_id: filters.majorId } : {}),
     ...(filters.semesterId !== null ? { hoc_ky_id: filters.semesterId } : {}),
-    ...(filters.campusId !== null ? { campus_id: filters.campusId } : {}),
+    ...(campusId !== null ? { campus_id: campusId } : {}),
     ...(filters.building !== null ? { building: filters.building } : {}),
     ...(filters.week
       ? { start_date: filters.week.start_date, end_date: filters.week.end_date }
       : selectedSemester
         ? { start_date: selectedSemester.start_date, end_date: selectedSemester.end_date }
         : {}),
-  }), [filters, selectedSemester])
+  }), [campusId, filters, selectedSemester])
 
-  useEffect(() => {
-    let active = true
-
-    Promise.all([
-      apiClient.get<RoomUtilizationResponse>('/analytics/room-utilization', { params: analyticsParams }),
-      apiClient.get<RoomDemandResponse>('/analytics/room-demand', { params: analyticsParams }),
-      apiClient.get<UnderutilizedRoomsResponse>('/analytics/underutilized-rooms', { params: analyticsParams }),
-    ])
-      .then(([utilizationResponse, demandResponse, underutilizedResponse]) => {
-        if (!active) return
-        setUtilization(utilizationResponse.data)
-        setDemand(demandResponse.data)
-        setUnderutilized(underutilizedResponse.data)
-      })
-      .catch((requestError: unknown) => {
-        if (active) setError(getErrorMessage(requestError))
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [analyticsParams, refreshKey])
+  const analyticsQuery = useQuery({
+    queryKey: ['analytics', analyticsParams],
+    queryFn: async () => {
+      const [utilizationResponse, demandResponse, underutilizedResponse] = await Promise.all([
+        apiClient.get<RoomUtilizationResponse>('/analytics/room-utilization', { params: analyticsParams }),
+        apiClient.get<RoomDemandResponse>('/analytics/room-demand', { params: analyticsParams }),
+        apiClient.get<UnderutilizedRoomsResponse>('/analytics/underutilized-rooms', { params: analyticsParams }),
+      ])
+      return {
+        utilization: utilizationResponse.data,
+        demand: demandResponse.data,
+        underutilized: underutilizedResponse.data,
+      }
+    },
+    enabled: referencesQuery.isSuccess,
+  })
+  const utilization = analyticsQuery.data?.utilization ?? null
+  const demand = analyticsQuery.data?.demand ?? null
+  const underutilized = analyticsQuery.data?.underutilized ?? null
+  const loading = analyticsQuery.isFetching
+  const error = analyticsQuery.error ? getErrorMessage(analyticsQuery.error) : null
 
   const refresh = () => {
-    setLoading(true)
-    setError(null)
-    setRefreshKey((key) => key + 1)
+    void queryClient.invalidateQueries({ queryKey: ['analytics'] })
   }
 
   const updateFilters = (updates: Partial<typeof filters>) => {
-    setLoading(true)
-    setError(null)
     setFilters((current) => ({ ...current, ...updates }))
   }
 
@@ -248,7 +232,7 @@ export default function Dashboard() {
       axisPointer: { type: 'shadow' },
       valueFormatter: (value: unknown) => `${Number(value).toFixed(1)}%`,
     },
-    grid: { left: 16, right: 32, top: 12, bottom: 24, containLabel: true },
+    grid: { left: 16, right: 32, top: 12, bottom: 88, containLabel: true },
     yAxis: {
       type: 'value',
       max: 100,
@@ -260,6 +244,14 @@ export default function Dashboard() {
       data: [...(utilization?.rooms ?? [])].reverse().map((room) => room.room_name),
       axisTick: { show: false },
       axisLine: { show: false },
+      axisLabel: {
+        interval: 0,
+        rotate: 35,
+        hideOverlap: false,
+        fontSize: 10,
+        width: 110,
+        overflow: 'break',
+      },
     },
     series: [
       {
@@ -271,7 +263,7 @@ export default function Dashboard() {
         showBackground: true,
         backgroundStyle: { color: '#f1f5f9', borderRadius: 5 },
         itemStyle: { color: '#1687d9', borderRadius: [0, 5, 5, 0] },
-        label: { show: true, position: 'right', formatter: '{c}%' },
+        label: { show: true, position: 'top', formatter: '{c}%' },
       },
     ],
   }), [utilization])
@@ -300,7 +292,7 @@ export default function Dashboard() {
           return `${dayNames[dayIndex]}<br/>${slots[slotIndex]}: ${count} buổi`
         },
       },
-      grid: { left: 16, right: 16, top: 12, bottom: 28, containLabel: true },
+      grid: { left: 16, right: 72, top: 12, bottom: 78, containLabel: true },
       xAxis: {
         type: 'category',
         data: slots,
@@ -318,10 +310,12 @@ export default function Dashboard() {
       visualMap: {
         min: 0,
         max: Math.max(1, ...(demand?.demand ?? []).map((item) => item.schedule_count)),
-        calculable: true,
-        orient: 'horizontal',
-        left: 'center',
-        bottom: 0,
+        orient: 'vertical',
+        right: 4,
+        top: 'middle',
+        itemHeight: 120,
+        itemWidth: 10,
+        textStyle: { fontSize: 10, color: '#64748b' },
         inRange: { color: ['#eaf4fc', '#84c5f4', '#1687d9', '#07508d'] },
       },
       series: [
@@ -345,118 +339,138 @@ export default function Dashboard() {
     : 'Đang tải khoảng thời gian...'
 
   return (
-    <Flex vertical gap={20}>
-      <Flex justify="space-between" align="center" wrap="wrap" gap={12}>
-        <div>
-          <Typography.Title level={3} style={{ margin: 0 }}>Tổng quan phân tích</Typography.Title>
-          <Typography.Text type="secondary">Dữ liệu từ {period}</Typography.Text>
+    <Flex vertical gap={20} className="dashboard-page">
+      <section className="dashboard-hero">
+        <div className="dashboard-hero-content">
+          <span className="dashboard-eyebrow">
+            <BarChartOutlined />
+            TRUNG TÂM PHÂN TÍCH
+          </span>
+          <Typography.Title level={2} className="dashboard-title">
+            Tổng quan phân tích
+          </Typography.Title>
+          <Typography.Text className="dashboard-subtitle">
+            Theo dõi hiệu quả khai thác phòng học và nhu cầu sử dụng trên toàn hệ thống.
+          </Typography.Text>
+          <span className="dashboard-period">
+            <CalendarOutlined />
+            Dữ liệu từ {period}
+          </span>
         </div>
-        <Button
-          icon={<ReloadOutlined />}
-          loading={loading}
-          onClick={refresh}
-        >
-          Làm mới
-        </Button>
-      </Flex>
+        <div className="dashboard-hero-decoration" aria-hidden="true" />
+      </section>
 
       <EnergyDashboard />
 
-      <Card size="small">
-        <Space wrap style={{ width: '100%' }} size={[12, 12]}>
-          <Select
-            aria-label="Lọc theo cơ sở"
-            placeholder="Tất cả cơ sở"
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            loading={filtersLoading}
-            style={{ width: 220 }}
-            value={filters.campusId ?? undefined}
-            options={campusesWithRooms.map((campus) => ({ value: campus.id, label: campus.name }))}
-            onChange={(campusId: number | undefined) =>
-              updateFilters({
-                campusId: campusId ?? null,
-                building: null,
-              })
-            }
-          />
-          <Select
-            aria-label="Lọc theo tòa"
-            placeholder="Tất cả tòa"
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            disabled={availableBuildings.length === 0}
-            style={{ width: 200 }}
-            value={filters.building ?? undefined}
-            options={availableBuildings.map((building) => ({ value: building, label: building }))}
-            onChange={(building: string | undefined) =>
-              updateFilters({ building: building ?? null })
-            }
-          />
-          <Select
-            aria-label="Lọc theo ngành"
-            placeholder="Tất cả ngành"
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            loading={filtersLoading}
-            style={{ width: 220 }}
-            value={filters.majorId ?? undefined}
-            options={majors.map((major) => ({ value: major.id, label: major.name }))}
-            onChange={(majorId: number | undefined) =>
-              updateFilters({
-                majorId: majorId ?? null,
-                classId: null,
-              })
-            }
-          />
-          <Select
-            aria-label="Lọc theo lớp"
-            placeholder="Tất cả lớp"
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            loading={filtersLoading}
-            style={{ width: 220 }}
-            value={filters.classId ?? undefined}
-            options={availableClasses.map((schoolClass) => ({
-              value: schoolClass.id,
-              label: schoolClass.name,
-            }))}
-            onChange={(classId: number | undefined) => updateFilters({ classId: classId ?? null })}
-          />
-          <Select
-            aria-label="Lọc theo học kỳ"
-            placeholder="Tất cả học kỳ"
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            loading={filtersLoading}
-            style={{ width: 220 }}
-            value={filters.semesterId ?? undefined}
-            options={semesters.map((semester) => ({ value: semester.id, label: semester.name }))}
-            onChange={(semesterId: number | undefined) =>
-              updateFilters({ semesterId: semesterId ?? null, week: null })
-            }
-          />
-          <Select
-            aria-label="Lọc theo tuần"
-            placeholder="Cả khoảng thời gian"
-            allowClear
-            disabled={filters.semesterId === null}
-            style={{ width: 260 }}
-            value={filters.week?.start_date}
-            options={weeks.map((week) => ({ value: week.start_date, label: week.label }))}
-            onChange={(startDate: string | undefined) =>
-              updateFilters({ week: weeks.find((week) => week.start_date === startDate) ?? null })
-            }
-          />
-        </Space>
+      <Card className="dashboard-filter-panel">
+        <Flex vertical gap={16}>
+          <Flex align="center" justify="space-between" wrap="wrap" gap={12}>
+            <Flex align="center" gap={12}>
+              <span className="dashboard-filter-icon"><FilterOutlined /></span>
+              <div className="dashboard-filter-heading">
+                <Typography.Text strong>Bộ lọc dữ liệu</Typography.Text>
+                <Typography.Text type="secondary">
+                  Tùy chỉnh phạm vi báo cáo theo cơ sở, lớp học và thời gian
+                </Typography.Text>
+              </div>
+            </Flex>
+            <span className="dashboard-filter-hint">Các biểu đồ và chỉ số sẽ được cập nhật theo bộ lọc</span>
+          </Flex>
+          <Space wrap className="dashboard-filter-controls" size={[12, 12]}>
+            <SearchFilterSelect
+              aria-label="Lọc theo cơ sở"
+              placeholder="Tất cả cơ sở"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              loading={filtersLoading}
+              style={{ width: 220 }}
+              value={campusId ?? undefined}
+              options={campusesWithRooms.map((campus) => ({ value: campus.id, label: campus.name }))}
+              onChange={(campusId: number | undefined) =>
+                updateFilters({
+                  campusId: campusId ?? null,
+                  building: null,
+                })
+              }
+            />
+            <SearchFilterSelect
+              aria-label="Lọc theo tòa"
+              placeholder="Tất cả tòa"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              disabled={availableBuildings.length === 0}
+              style={{ width: 200 }}
+              value={filters.building ?? undefined}
+              options={availableBuildings.map((building) => ({ value: building, label: building }))}
+              onChange={(building: string | undefined) =>
+                updateFilters({ building: building ?? null })
+              }
+            />
+            <SearchFilterSelect
+              aria-label="Lọc theo ngành"
+              placeholder="Tất cả ngành"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              loading={filtersLoading}
+              style={{ width: 220 }}
+              value={filters.majorId ?? undefined}
+              options={majors.map((major) => ({ value: major.id, label: major.name }))}
+              onChange={(majorId: number | undefined) =>
+                updateFilters({
+                  majorId: majorId ?? null,
+                  classId: null,
+                })
+              }
+            />
+            <SearchFilterSelect
+              aria-label="Lọc theo lớp"
+              placeholder="Tất cả lớp"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              loading={filtersLoading}
+              style={{ width: 220 }}
+              value={filters.classId ?? undefined}
+              options={availableClasses.map((schoolClass) => ({
+                value: schoolClass.id,
+                label: schoolClass.name,
+              }))}
+              onChange={(classId: number | undefined) => updateFilters({ classId: classId ?? null })}
+            />
+            <SearchFilterSelect
+              aria-label="Lọc theo học kỳ"
+              placeholder="Tất cả học kỳ"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              loading={filtersLoading}
+              style={{ width: 220 }}
+              value={filters.semesterId ?? undefined}
+              options={semesters.map((semester) => ({ value: semester.id, label: semester.name }))}
+              onChange={(semesterId: number | undefined) =>
+                updateFilters({ semesterId: semesterId ?? null, week: null })
+              }
+            />
+            <SearchFilterSelect
+              aria-label="Lọc theo tuần"
+              placeholder="Chọn tuần"
+              allowClear
+              disabled={filters.semesterId === null}
+              style={{ width: 260 }}
+              value={filters.week?.start_date}
+              options={weeks.map((week) => ({ value: week.start_date, label: week.label }))}
+              onChange={(startDate: string | undefined) =>
+                updateFilters({ week: weeks.find((week) => week.start_date === startDate) ?? null })
+              }
+            />
+          </Space>
+        </Flex>
         {filtersError && (
           <Alert
-            style={{ marginTop: 12 }}
+            className="dashboard-filter-error"
             type="error"
             showIcon
             message="Không thể tải danh sách bộ lọc"
@@ -482,52 +496,70 @@ export default function Dashboard() {
       <Spin spinning={loading && !utilization}>
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={12} xl={6}>
-            <Card>
-              <Statistic
-                title="Tổng số phòng"
-                value={utilization?.rooms.length ?? 0}
-                prefix={<ApartmentOutlined />}
-              />
+            <Card className="dashboard-stat-card">
+              <div className="dashboard-stat-heading">
+                <span className="dashboard-stat-icon tone-blue"><ApartmentOutlined /></span>
+                <Typography.Text type="secondary">Tổng số phòng</Typography.Text>
+              </div>
+              <Statistic className="dashboard-statistic" value={utilization?.rooms.length ?? 0} />
+              <Typography.Text className="dashboard-stat-caption">Trong phạm vi lọc hiện tại</Typography.Text>
             </Card>
           </Col>
           <Col xs={24} sm={12} xl={6}>
-            <Card>
-              <Statistic
-                title="Tỷ lệ sử dụng trung bình"
-                value={averageUtilization}
-                precision={1}
-                suffix="%"
-                prefix={<TeamOutlined />}
-              />
+            <Card className="dashboard-stat-card">
+              <div className="dashboard-stat-heading">
+                <span className="dashboard-stat-icon tone-green"><TeamOutlined /></span>
+                <Typography.Text type="secondary">Tỷ lệ sử dụng trung bình</Typography.Text>
+              </div>
+              <Statistic className="dashboard-statistic" value={averageUtilization} precision={1} suffix="%" />
+              <Typography.Text className="dashboard-stat-caption">Tính trên các phòng trong kỳ</Typography.Text>
             </Card>
           </Col>
           <Col xs={24} sm={12} xl={6}>
-            <Card>
+            <Card className="dashboard-stat-card">
+              <div className="dashboard-stat-heading">
+                <span className="dashboard-stat-icon tone-violet"><ScheduleOutlined /></span>
+                <Typography.Text type="secondary">Lượt sử dụng phòng</Typography.Text>
+              </div>
               <Statistic
-                title="Lượt sử dụng phòng"
+                className="dashboard-statistic"
                 value={utilization?.rooms.reduce((total, room) => total + room.occupied_slots, 0) ?? 0}
-                prefix={<ScheduleOutlined />}
               />
+              <Typography.Text className="dashboard-stat-caption">Tổng lượt sử dụng trong kỳ</Typography.Text>
             </Card>
           </Col>
           <Col xs={24} sm={12} xl={6}>
-            <Card>
+            <Card className="dashboard-stat-card">
+              <div className="dashboard-stat-heading">
+                <span className="dashboard-stat-icon tone-amber"><WarningOutlined /></span>
+                <Typography.Text type="secondary">
+                  Phòng sử dụng dưới {((underutilized?.threshold ?? 0.2) * 100).toFixed(0)}%
+                </Typography.Text>
+              </div>
               <Statistic
-                title={`Phòng sử dụng dưới ${((underutilized?.threshold ?? 0.2) * 100).toFixed(0)}%`}
+                className="dashboard-statistic"
                 value={underutilized?.rooms.length ?? 0}
-                prefix={<WarningOutlined />}
-                valueStyle={{ color: underutilized?.rooms.length ? '#d97706' : undefined }}
+                valueStyle={{ color: underutilized?.rooms.length ? '#c76c0a' : undefined }}
               />
+              <Typography.Text className="dashboard-stat-caption">Cần lưu ý về hiệu suất khai thác</Typography.Text>
             </Card>
           </Col>
 
           <Col xs={24} xl={12}>
             <Card
-              title={[
-                'Tỷ lệ sử dụng theo phòng',
-                campusesWithRooms.find((campus) => campus.id === filters.campusId)?.name,
-                filters.building,
-              ].filter(Boolean).join(' · ')}
+              className="dashboard-panel"
+              title={<div className="dashboard-panel-title">
+                <span className="dashboard-panel-icon"><ApartmentOutlined /></span>
+                <div>
+                  <Typography.Text strong>Tỷ lệ sử dụng theo phòng</Typography.Text>
+                  <Typography.Text type="secondary">
+                    {[
+                      campusesWithRooms.find((campus) => campus.id === campusId)?.name,
+                      filters.building,
+                    ].filter(Boolean).join(' · ') || 'Tất cả cơ sở và tòa nhà'}
+                  </Typography.Text>
+                </div>
+              </div>}
             >
               {utilization?.rooms.length ? (
                 <EChart option={utilizationOption} />
@@ -537,22 +569,42 @@ export default function Dashboard() {
             </Card>
           </Col>
           <Col xs={24} xl={12}>
-            <Card title="Nhu cầu phòng theo ngày và ca học (số lượng buổi trong học kỳ)">
+            <Card
+              className="dashboard-panel"
+              title={<div className="dashboard-panel-title">
+                <span className="dashboard-panel-icon"><ScheduleOutlined /></span>
+                <div>
+                  <Typography.Text strong>Nhu cầu phòng theo ngày và ca học</Typography.Text>
+                  <Typography.Text type="secondary">Số buổi theo thời gian đã chọn</Typography.Text>
+                </div>
+              </div>}
+            >
               {demand?.demand.length ? (
-                <EChart option={demandOption} />
+                <EChart option={demandOption} height={390} />
               ) : (
                 <Empty description="Chưa có dữ liệu nhu cầu phòng" />
               )}
             </Card>
           </Col>
           <Col span={24}>
-            <Card title="Phòng có tỷ lệ sử dụng thấp">
-              <Table<RoomUtilization>
-                rowKey="room_id"
+            <Card
+              className="dashboard-panel dashboard-panel-warning"
+              title={<div className="dashboard-panel-title">
+                <span className="dashboard-panel-icon dashboard-panel-icon-warning"><WarningOutlined /></span>
+                <div>
+                  <Typography.Text strong>Phòng có tỷ lệ sử dụng thấp</Typography.Text>
+                  <Typography.Text type="secondary">Danh sách phòng dưới ngưỡng sử dụng hiện tại</Typography.Text>
+                </div>
+              </div>}
+            >
+              <SearchableTable<RoomUtilization>
+                rowKey={(room) => room.room_id}
                 size="small"
                 pagination={{ pageSize: 5, hideOnSinglePage: true }}
                 dataSource={underutilized?.rooms ?? []}
-                locale={{ emptyText: 'Không có phòng nào dưới ngưỡng sử dụng' }}
+                searchPlaceholder="Tìm phòng..."
+                getSearchText={(room) => room.room_name}
+                emptyText="Không có phòng nào dưới ngưỡng sử dụng"
                 columns={[
                   { title: 'Phòng', dataIndex: 'room_name', key: 'room_name' },
                   { title: 'Lượt sử dụng', dataIndex: 'occupied_slots', key: 'occupied_slots' },
