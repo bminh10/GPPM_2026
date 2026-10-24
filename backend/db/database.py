@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     CheckConstraint,
     UniqueConstraint,
+    Text,
     create_engine,
     func,
 )
@@ -237,6 +238,28 @@ class AuditLog(Base):
     status_code = Column(Integer, nullable=False)
     details = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ScheduleOptimizationJob(Base):
+    __tablename__ = "schedule_optimization_job"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String, nullable=False, default="pending")
+    request = Column(JSONB, nullable=False)
+    result = Column(JSONB)
+    error = Column(Text)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
 
 # Create tables in the database if they do not exist
