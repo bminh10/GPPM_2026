@@ -116,6 +116,10 @@ const EMPTY_TIME_SLOTS: TimeSlotOption[] = []
 const EMPTY_FACULTIES: FacultyOption[] = []
 const EMPTY_MAJORS: MajorOption[] = []
 const EMPTY_SCHEDULES: Schedule[] = []
+const TIMETABLE_REFERENCES_STALE_TIME = 10 * 60_000
+const TIMETABLE_SCHEDULES_STALE_TIME = 5 * 60_000
+const TIMETABLE_CACHE_TIME = 30 * 60_000
+const AUTO_SCHEDULE_SCHEDULES_STALE_TIME = 15_000
 
 function toDateString(value: Date) {
   const year = value.getFullYear()
@@ -260,6 +264,8 @@ export default function TimetablePage() {
 
   const referencesQuery = useQuery({
     queryKey: ['timetable', 'references'],
+    staleTime: TIMETABLE_REFERENCES_STALE_TIME,
+    gcTime: TIMETABLE_CACHE_TIME,
     queryFn: async () => {
       const [
         classesResult,
@@ -331,6 +337,8 @@ export default function TimetablePage() {
   }), [facultyId, majorId, roomId, selectedSemesterId])
   const schedulesQuery = useQuery({
     queryKey: ['schedules', scheduleParams],
+    staleTime: TIMETABLE_SCHEDULES_STALE_TIME,
+    gcTime: TIMETABLE_CACHE_TIME,
     queryFn: async () => {
       const { data } = await apiClient.get<Schedule[]>('/schedules', {
         params: scheduleParams,
@@ -349,10 +357,10 @@ export default function TimetablePage() {
       return data
     },
     enabled: automaticScheduleOpen && selectedSemesterId !== undefined,
-    staleTime: 15_000,
+    staleTime: AUTO_SCHEDULE_SCHEDULES_STALE_TIME,
   })
   const schedules = schedulesQuery.data ?? EMPTY_SCHEDULES
-  const scheduleLoading = schedulesQuery.isFetching
+  const scheduleLoading = schedulesQuery.isLoading
   const scheduleError = schedulesQuery.error
     ? getErrorMessage(schedulesQuery.error)
     : null
@@ -467,7 +475,7 @@ export default function TimetablePage() {
           })
           return data
         },
-        staleTime: 0,
+        staleTime: AUTO_SCHEDULE_SCHEDULES_STALE_TIME,
       })
       setAutomaticScheduleMode('missing')
       setAutomaticScheduleScope('all')
