@@ -1,16 +1,28 @@
 import { useMemo, useState } from 'react'
-import { Card, Empty, Flex, Progress, Tag, Typography } from 'antd'
-import { ROOM_STATE_META, getRoomState, type Building, type Room } from '../../data/campusData'
+import { Card, Empty, Flex, Tag, Typography } from 'antd'
+import {
+  ROOM_STATE_META,
+  normalizeRoomCode,
+  type Building,
+  type Room,
+} from '../../data/campusData'
 import SearchInput from '../common/SearchInput'
 
 type Props = {
   rooms: Room[]
   buildings: Building[]
+  scheduledRoomNames: string[]
   selectedRoomId: string | null
   onSelectRoom: (roomId: string) => void
 }
 
-export default function RoomListPanel({ rooms: allRooms, buildings, selectedRoomId, onSelectRoom }: Props) {
+export default function RoomListPanel({
+  rooms: allRooms,
+  buildings,
+  scheduledRoomNames,
+  selectedRoomId,
+  onSelectRoom,
+}: Props) {
   const [query, setQuery] = useState('')
 
   const filtered = useMemo(() => {
@@ -36,9 +48,10 @@ export default function RoomListPanel({ rooms: allRooms, buildings, selectedRoom
       <Flex vertical gap={8} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {filtered.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có phòng" />}
         {filtered.map((room) => {
-          const state = getRoomState(room)
-          const meta = ROOM_STATE_META[state]
-          const rate = Math.round((room.occupancy / room.capacity) * 100)
+          const hasSchedule = scheduledRoomNames.some(
+            (name) => normalizeRoomCode(name) === normalizeRoomCode(room.code),
+          )
+          const color = hasSchedule ? '#1677ff' : ROOM_STATE_META.available.color
           return (
             <Card
               key={room.id}
@@ -47,21 +60,23 @@ export default function RoomListPanel({ rooms: allRooms, buildings, selectedRoom
               onClick={() => onSelectRoom(room.id)}
               style={{
                 borderColor: room.id === selectedRoomId ? 'var(--color-primary)' : undefined,
-                borderLeft: `5px solid ${meta.color}`,
+                borderLeft: `5px solid ${color}`,
               }}
             >
               <Flex justify="space-between" align="center">
                 <Typography.Text strong>{room.code}</Typography.Text>
                 <Flex gap={4}>
                   <Tag color="blue" variant="filled">
-                    {buildings.find((b) => b.id === room.buildingId)?.name} · T{room.floor}
+                    {room.databaseBuilding || buildings.find((b) => b.id === room.buildingId)?.name} · T{room.floor}
                   </Tag>
                 </Flex>
               </Flex>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 {room.name}
               </Typography.Text>
-              <Progress percent={rate} size="small" strokeColor={meta.color} format={(p) => `${p}%`} />
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                Sức chứa: {room.capacity} chỗ
+              </Typography.Text>
             </Card>
           )
         })}

@@ -360,8 +360,6 @@ export default function Dashboard() {
         <div className="dashboard-hero-decoration" aria-hidden="true" />
       </section>
 
-      <EnergyDashboard />
-
       <Card className="dashboard-filter-panel">
         <Flex vertical gap={16}>
           <Flex align="center" justify="space-between" wrap="wrap" gap={12}>
@@ -544,87 +542,104 @@ export default function Dashboard() {
               <Typography.Text className="dashboard-stat-caption">Cần lưu ý về hiệu suất khai thác</Typography.Text>
             </Card>
           </Col>
-
-          <Col xs={24} xl={12}>
-            <Card
-              className="dashboard-panel"
-              title={<div className="dashboard-panel-title">
-                <span className="dashboard-panel-icon"><ApartmentOutlined /></span>
-                <div>
-                  <Typography.Text strong>Tỷ lệ sử dụng theo phòng</Typography.Text>
-                  <Typography.Text type="secondary">
-                    {[
-                      campusesWithRooms.find((campus) => campus.id === campusId)?.name,
-                      filters.building,
-                    ].filter(Boolean).join(' · ') || 'Tất cả cơ sở và tòa nhà'}
-                  </Typography.Text>
-                </div>
-              </div>}
-            >
-              {utilization?.rooms.length ? (
-                <EChart option={utilizationOption} />
-              ) : (
-                <Empty description="Chưa có dữ liệu sử dụng phòng" />
-              )}
-            </Card>
-          </Col>
-          <Col xs={24} xl={12}>
-            <Card
-              className="dashboard-panel"
-              title={<div className="dashboard-panel-title">
-                <span className="dashboard-panel-icon"><ScheduleOutlined /></span>
-                <div>
-                  <Typography.Text strong>Nhu cầu phòng theo ngày và ca học</Typography.Text>
-                  <Typography.Text type="secondary">Số buổi theo thời gian đã chọn</Typography.Text>
-                </div>
-              </div>}
-            >
-              {demand?.demand.length ? (
-                <EChart option={demandOption} height={390} />
-              ) : (
-                <Empty description="Chưa có dữ liệu nhu cầu phòng" />
-              )}
-            </Card>
-          </Col>
-          <Col span={24}>
-            <Card
-              className="dashboard-panel dashboard-panel-warning"
-              title={<div className="dashboard-panel-title">
-                <span className="dashboard-panel-icon dashboard-panel-icon-warning"><WarningOutlined /></span>
-                <div>
-                  <Typography.Text strong>Phòng có tỷ lệ sử dụng thấp</Typography.Text>
-                  <Typography.Text type="secondary">Danh sách phòng dưới ngưỡng sử dụng hiện tại</Typography.Text>
-                </div>
-              </div>}
-            >
-              <SearchableTable<RoomUtilization>
-                rowKey={(room) => room.room_id}
-                size="small"
-                pagination={{ pageSize: 5, hideOnSinglePage: true }}
-                dataSource={underutilized?.rooms ?? []}
-                searchPlaceholder="Tìm phòng..."
-                getSearchText={(room) => room.room_name}
-                emptyText="Không có phòng nào dưới ngưỡng sử dụng"
-                columns={[
-                  { title: 'Phòng', dataIndex: 'room_name', key: 'room_name' },
-                  { title: 'Lượt sử dụng', dataIndex: 'occupied_slots', key: 'occupied_slots' },
-                  {
-                    title: 'Lượt còn trống',
-                    dataIndex: 'available_slots',
-                    key: 'available_slots',
-                  },
-                  {
-                    title: 'Tỷ lệ sử dụng',
-                    dataIndex: 'utilization_rate',
-                    key: 'utilization_rate',
-                    render: (rate: number) => `${(rate * 100).toFixed(1)}%`,
-                  },
-                ]}
-              />
-            </Card>
-          </Col>
         </Row>
       </Spin>
+
+      <EnergyDashboard>
+        {({ summary, comparison, roomTable }) => (
+          <>
+            {summary}
+            <Spin spinning={loading && !utilization}>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} xl={12}>
+                  <Card
+                    className="dashboard-panel"
+                    title={<div className="dashboard-panel-title">
+                      <span className="dashboard-panel-icon"><ApartmentOutlined /></span>
+                      <div>
+                        <Typography.Text strong>Tỷ lệ sử dụng theo phòng</Typography.Text>
+                        <Typography.Text type="secondary">
+                          {[
+                            campusesWithRooms.find((campus) => campus.id === campusId)?.name,
+                            filters.building,
+                          ].filter(Boolean).join(' · ') || 'Tất cả cơ sở và tòa nhà'}
+                        </Typography.Text>
+                      </div>
+                    </div>}
+                  >
+                    {utilization?.rooms.length ? (
+                      <EChart option={utilizationOption} />
+                    ) : (
+                      <Empty description="Chưa có dữ liệu sử dụng phòng" />
+                    )}
+                  </Card>
+                </Col>
+                <Col xs={24} xl={12}>
+                  {comparison}
+                </Col>
+              </Row>
+              <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+                <Col span={24}>
+                  <Card
+                    className="dashboard-panel"
+                    title={<div className="dashboard-panel-title">
+                      <span className="dashboard-panel-icon"><ScheduleOutlined /></span>
+                      <div>
+                        <Typography.Text strong>Nhu cầu phòng theo ngày và ca học</Typography.Text>
+                        <Typography.Text type="secondary">Số buổi theo thời gian đã chọn</Typography.Text>
+                      </div>
+                    </div>}
+                  >
+                    {demand?.demand.length ? (
+                      <EChart option={demandOption} height={390} />
+                    ) : (
+                      <Empty description="Chưa có dữ liệu nhu cầu phòng" />
+                    )}
+                  </Card>
+                </Col>
+                <Col span={24}>
+                  <Card
+                    className="dashboard-panel dashboard-panel-warning"
+                    title={<div className="dashboard-panel-title">
+                      <span className="dashboard-panel-icon dashboard-panel-icon-warning"><WarningOutlined /></span>
+                      <div>
+                        <Typography.Text strong>Phòng có tỷ lệ sử dụng thấp</Typography.Text>
+                        <Typography.Text type="secondary">Danh sách phòng dưới ngưỡng sử dụng hiện tại</Typography.Text>
+                      </div>
+                    </div>}
+                  >
+                    <SearchableTable<RoomUtilization>
+                      rowKey={(room) => room.room_id}
+                      size="small"
+                      pagination={{ pageSize: 5, hideOnSinglePage: true }}
+                      dataSource={underutilized?.rooms ?? []}
+                      searchPlaceholder="Tìm phòng..."
+                      getSearchText={(room) => room.room_name}
+                      emptyText="Không có phòng nào dưới ngưỡng sử dụng"
+                      columns={[
+                        { title: 'Phòng', dataIndex: 'room_name', key: 'room_name' },
+                        { title: 'Lượt sử dụng', dataIndex: 'occupied_slots', key: 'occupied_slots' },
+                        {
+                          title: 'Lượt còn trống',
+                          dataIndex: 'available_slots',
+                          key: 'available_slots',
+                        },
+                        {
+                          title: 'Tỷ lệ sử dụng',
+                          dataIndex: 'utilization_rate',
+                          key: 'utilization_rate',
+                          render: (rate: number) => `${(rate * 100).toFixed(1)}%`,
+                        },
+                      ]}
+                    />
+                  </Card>
+                </Col>
+              </Row>
+            </Spin>
+            {roomTable}
+          </>
+        )}
+      </EnergyDashboard>
     </Flex>
   )
 }

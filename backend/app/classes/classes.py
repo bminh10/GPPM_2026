@@ -48,7 +48,7 @@ def get_classes(
         query = query.filter(Lop.nganh_id == nganh_id)
     if name:
         query = query.filter(Lop.name.ilike(f"%{name}%"))
-    return query.all()
+    return query.join(Nganh, Lop.nganh_id == Nganh.id).order_by(Lop.name, Nganh.name).all()
 
 
 @router.get("/{id}", response_model=ClassResponse)

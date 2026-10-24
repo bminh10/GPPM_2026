@@ -46,7 +46,7 @@ def require_available_code(code: str, db: Session, subject_id: int | None = None
 
 @router.get("", response_model=list[SubjectResponse])
 def get_subjects(db: Session = Depends(get_db)):
-    return db.query(MonHoc).all()
+    return db.query(MonHoc).order_by(MonHoc.name, MonHoc.code).all()
 
 
 @router.get("/{id}", response_model=SubjectResponse)

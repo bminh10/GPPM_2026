@@ -1,4 +1,5 @@
 import time
+from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -38,7 +39,9 @@ def list_lights(db: Session = Depends(get_db)):
     return [
         service.snapshot(light, device, now)
         for light, device in db.query(RoomLight, LightingDevice)
-        .join(LightingDevice, RoomLight.device_id == LightingDevice.id).all()
+        .join(LightingDevice, RoomLight.device_id == LightingDevice.id)
+        .order_by(RoomLight.campus_id, RoomLight.room_id, RoomLight.light_id)
+        .all()
     ]
 
 
@@ -50,13 +53,16 @@ def command(campus_id: str, room_id: str, light_id: str, data: LightCommand, db:
 @router.get("/energy", dependencies=[Depends(get_current_user)])
 def energy_summary(
     days: int = Query(default=7, ge=1, le=90),
+    end_date: date | None = Query(default=None),
     campus_id: str | None = Query(default=None, min_length=1, max_length=80),
     room_id: str | None = Query(default=None, min_length=1, max_length=80),
     db: Session = Depends(get_db),
 ):
     if room_id is not None and campus_id is None:
         raise HTTPException(422, "campus_id is required with room_id")
-    return energy.summarize(db, days, service.OFFLINE_SECONDS, campus_id, room_id)
+    if end_date is not None and end_date > datetime.now(energy.LOCAL_TIMEZONE).date():
+        raise HTTPException(422, "end_date cannot be in the future")
+    return energy.summarize(db, days, service.OFFLINE_SECONDS, campus_id, room_id, end_date=end_date)
 
 
 @router.put("/rooms/{campus_id}/{room_id}/lights/{light_id}/power", dependencies=[Depends(require_admin)])

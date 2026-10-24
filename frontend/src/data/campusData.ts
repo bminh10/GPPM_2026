@@ -34,6 +34,8 @@ export type Room = {
   id: string
   code: string
   name: string
+  databaseRoomId?: number
+  databaseBuilding?: string | null
   buildingId: string
   campusId: string
   floor: number
@@ -55,6 +57,16 @@ export const ROOM_STATE_META: Record<RoomState, { label: string; color: string }
   inUse: { label: 'Đang có lớp', color: colors.campus.moderate },
   crowded: { label: 'Gần quá tải', color: colors.campus.busy },
   maintenance: { label: 'Bảo trì', color: colors.campus.maintenance },
+}
+
+export function normalizeRoomCode(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase()
+    .replace(/đ/g, 'd')
+    .replace(/^(?:phong(?:\s*hoc)?|room)\s*/, '')
+    .replace(/[^a-z0-9]/g, '')
 }
 
 const METERS_PER_DEG = 111320

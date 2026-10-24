@@ -46,9 +46,15 @@ export type EnergySummary = {
 
 export const ENERGY_EXPLANATION = 'Ước tính từ công suất cấu hình và thời gian bật đèn được thiết bị xác nhận, không phải số đo công tơ. Khi quá ngưỡng mất kết nối, thời gian thiếu dữ liệu không được cộng điện năng.'
 
-export async function getEnergy(days: number, campus?: string, room?: string, signal?: AbortSignal) {
+export async function getEnergy(
+  days: number,
+  campus?: string,
+  room?: string,
+  endDate?: string,
+  signal?: AbortSignal,
+) {
   const { data } = await apiClient.get<EnergySummary>('/lighting/energy', {
-    params: { days, campus_id: campus, room_id: room }, signal,
+    params: { days, campus_id: campus, room_id: room, end_date: endDate }, signal,
   })
   return data
 }

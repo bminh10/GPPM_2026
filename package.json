@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@fontsource/be-vietnam-pro": "^5.3.0",
     "echarts": "^6.1.0"
   }
 }

@@ -30,6 +30,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                         method=request.method,
                         path=request.url.path,
                         status_code=response.status_code,
+                        details=getattr(request.state, "audit_details", None),
                     )
                 )
                 db.commit()

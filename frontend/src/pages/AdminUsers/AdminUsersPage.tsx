@@ -87,6 +87,7 @@ export default function AdminUsersPage() {
   const [roles, setRoles] = useState<RoleOption[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
   const [editSubmitting, setEditSubmitting] = useState(false)
   const [editingUser, setEditingUser] = useState<ManagedUser | null>(null)
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null)
@@ -264,6 +265,7 @@ export default function AdminUsersPage() {
       })
       messageApi.success('Đã tạo tài khoản và cấp quyền')
       form.resetFields()
+      setCreateOpen(false)
       await loadUsers()
     } catch (error: unknown) {
       messageApi.error(getErrorMessage(error))
@@ -278,18 +280,61 @@ export default function AdminUsersPage() {
       <div>
         <Typography.Title level={3} style={{ marginBottom: 4 }}>Quản lý tài khoản</Typography.Title>
         <Typography.Text type="secondary">
-          Tạo tài khoản, cấp email đăng nhập, mật khẩu ứng dụng và phân quyền.
+          Xem danh sách, cập nhật trạng thái và phân quyền tài khoản.
         </Typography.Text>
       </div>
 
-      <Alert
-        type="info"
-        showIcon
-        message="Mật khẩu email"
-        description="Chỉ đặt mật khẩu đăng nhập CampusOpt. Không nhập hoặc lưu mật khẩu hộp thư email của người dùng."
-      />
+      <Card
+        title="Tài khoản hiện có"
+        extra={
+          <Space>
+            <Button onClick={() => void loadUsers()} loading={loading}>Tải lại</Button>
+            <Button
+              type="primary"
+              icon={<UserAddOutlined />}
+              onClick={() => setCreateOpen(true)}
+            >
+              Tạo tài khoản
+            </Button>
+          </Space>
+        }
+      >
+        {loadError ? (
+          <Alert type="error" showIcon message={loadError} />
+        ) : loading ? (
+          <div style={{ padding: 32, textAlign: 'center' }}><Spin /></div>
+        ) : (
+          <SearchableTable<ManagedUser>
+            rowKey={(record) => record.id}
+            columns={columns}
+            dataSource={users}
+            getSearchText={(record) =>
+              `${record.user_name} ${record.email} ${record.role ?? ''} ${record.is_active ? 'hoạt động' : 'vô hiệu hóa'}`
+            }
+            searchPlaceholder="Tìm theo tên, email, quyền hoặc trạng thái..."
+            emptyText="Chưa có tài khoản"
+            pagination={{ pageSize: 8, showSizeChanger: false }}
+          />
+        )}
+      </Card>
 
-      <Card title="Tạo tài khoản">
+      <Modal
+        title="Tạo tài khoản"
+        open={createOpen}
+        onCancel={() => {
+          setCreateOpen(false)
+          form.resetFields()
+        }}
+        footer={null}
+        destroyOnHidden
+      >
+        <Alert
+          type="info"
+          showIcon
+          message="Mật khẩu email"
+          description="Chỉ đặt mật khẩu đăng nhập SmartOU. Không nhập hoặc lưu mật khẩu hộp thư email của người dùng."
+          style={{ marginBottom: 16 }}
+        />
         <Form
           form={form}
           layout="vertical"
@@ -413,30 +458,7 @@ export default function AdminUsersPage() {
             Tạo tài khoản
           </Button>
         </Form>
-      </Card>
-
-      <Card
-        title="Tài khoản hiện có"
-        extra={<Button onClick={() => void loadUsers()} loading={loading}>Tải lại</Button>}
-      >
-        {loadError ? (
-          <Alert type="error" showIcon message={loadError} />
-        ) : loading ? (
-          <div style={{ padding: 32, textAlign: 'center' }}><Spin /></div>
-        ) : (
-          <SearchableTable<ManagedUser>
-            rowKey={(record) => record.id}
-            columns={columns}
-            dataSource={users}
-            getSearchText={(record) =>
-              `${record.user_name} ${record.email} ${record.role ?? ''} ${record.is_active ? 'hoạt động' : 'vô hiệu hóa'}`
-            }
-            searchPlaceholder="Tìm theo tên, email, quyền hoặc trạng thái..."
-            emptyText="Chưa có tài khoản"
-            pagination={{ pageSize: 8, showSizeChanger: false }}
-          />
-        )}
-      </Card>
+      </Modal>
       <Modal
         title={`Sửa tài khoản${editingUser ? `: ${editingUser.user_name}` : ''}`}
         open={editingUser !== null}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
   Alert,
@@ -84,6 +84,26 @@ type ScheduleEditValues = {
 }
 type AutomaticScheduleMode = 'missing' | 'all'
 type AutomaticScheduleScope = 'all' | 'faculty' | 'registrations'
+type UnscheduledRequirement = {
+  label: string
+  meeting_type: string
+  reason: string
+}
+type AutomaticScheduleResult = {
+  message: string
+  solver_status: string
+  relative_gap: number
+  unscheduled_count: number
+  unscheduled_requirements: UnscheduledRequirement[]
+  scheduled_count: number
+  replaced_count: number
+}
+type ScheduleOptimizationJob = {
+  job_id: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  result: AutomaticScheduleResult | null
+  error: string | null
+}
 
 const DAY_NAMES = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']
 const EMPTY_CLASSES: ClassOption[] = []
@@ -96,6 +116,10 @@ const EMPTY_TIME_SLOTS: TimeSlotOption[] = []
 const EMPTY_FACULTIES: FacultyOption[] = []
 const EMPTY_MAJORS: MajorOption[] = []
 const EMPTY_SCHEDULES: Schedule[] = []
+const TIMETABLE_REFERENCES_STALE_TIME = 10 * 60_000
+const TIMETABLE_SCHEDULES_STALE_TIME = 5 * 60_000
+const TIMETABLE_CACHE_TIME = 30 * 60_000
+const AUTO_SCHEDULE_SCHEDULES_STALE_TIME = 15_000
 
 function toDateString(value: Date) {
   const year = value.getFullYear()
@@ -147,11 +171,15 @@ function formatTime(value: string) {
 
 export default function TimetablePage() {
   const queryClient = useQueryClient()
-  const [semesterId, setSemesterId] = useState<number>()
+  const [semesterId, setSemesterId] = useState<number | undefined>(() => {
+    const savedSemesterId = window.sessionStorage.getItem('timetable.semesterId')
+    return savedSemesterId ? Number(savedSemesterId) : undefined
+  })
+  const [campusId, setCampusId] = useState<number>()
   const [facultyId, setFacultyId] = useState<number>()
   const [majorId, setMajorId] = useState<number>()
   const [roomId, setRoomId] = useState<number>()
-  const [weekAnchor, setWeekAnchor] = useState(() => toDateString(new Date()))
+  const [weekAnchorOverride, setWeekAnchorOverride] = useState<string>()
   const [draggedScheduleId, setDraggedScheduleId] = useState<number | null>(null)
   const [movingScheduleId, setMovingScheduleId] = useState<number | null>(null)
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
@@ -169,13 +197,75 @@ export default function TimetablePage() {
   const [confirmScheduleReplacement, setConfirmScheduleReplacement] = useState(false)
   const [automaticScheduleCampusId, setAutomaticScheduleCampusId] = useState<number>()
   const [automaticScheduleError, setAutomaticScheduleError] = useState<string | null>(null)
+  const [automaticScheduleJobId, setAutomaticScheduleJobId] = useState<string | null>(null)
+  const handledOptimizationJobId = useRef<string | null>(null)
   const [editForm] = Form.useForm<ScheduleEditValues>()
   const editingRegistrationId = Form.useWatch('dang_ky_mon_hoc_id', editForm)
   const editingIsPractice = Form.useWatch('is_thuc_hanh', editForm)
   const [messageApi, contextHolder] = message.useMessage()
+  const optimizationJobQuery = useQuery({
+    queryKey: ['optimization', 'schedule-job', automaticScheduleJobId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ScheduleOptimizationJob>(
+        `/optimization/schedule/jobs/${automaticScheduleJobId}`,
+      )
+      return data
+    },
+    enabled: automaticScheduleJobId !== null,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'pending' || query.state.data?.status === 'running'
+        ? 1000
+        : false,
+  })
+  useEffect(() => {
+    const job = optimizationJobQuery.data
+    if (
+      !job ||
+      job.status !== 'completed' ||
+      !job.result ||
+      handledOptimizationJobId.current === job.job_id
+    ) {
+      return
+    }
+
+    handledOptimizationJobId.current = job.job_id
+    void queryClient.invalidateQueries({ queryKey: ['schedules'] })
+    void queryClient.invalidateQueries({ queryKey: ['analytics'] })
+    if (job.result.unscheduled_count === 0) {
+      messageApi.success(job.result.message)
+    }
+  }, [
+    messageApi,
+    optimizationJobQuery.data,
+    optimizationJobQuery.error,
+    optimizationJobQuery.isError,
+    queryClient,
+  ])
+  const displayedAutomaticScheduleError =
+    automaticScheduleError ??
+    (optimizationJobQuery.isError
+      ? getErrorMessage(optimizationJobQuery.error)
+      : optimizationJobQuery.data?.status === 'failed'
+        ? optimizationJobQuery.data.error ??
+          'Đã xảy ra lỗi trong quá trình phân bổ lịch. Vui lòng thử lại.'
+        : null)
+  const automaticScheduleResult =
+    optimizationJobQuery.data?.status === 'completed'
+      ? optimizationJobQuery.data.result
+      : null
+  const automaticScheduleIsRunning =
+    automaticScheduleJobId !== null &&
+    !optimizationJobQuery.isError &&
+    (
+      optimizationJobQuery.data === undefined ||
+      optimizationJobQuery.data.status === 'pending' ||
+      optimizationJobQuery.data.status === 'running'
+    )
 
   const referencesQuery = useQuery({
     queryKey: ['timetable', 'references'],
+    staleTime: TIMETABLE_REFERENCES_STALE_TIME,
+    gcTime: TIMETABLE_CACHE_TIME,
     queryFn: async () => {
       const [
         classesResult,
@@ -230,7 +320,14 @@ export default function TimetablePage() {
       registrations.find((registration) => registration.id === editingRegistrationId)?.mon_id,
   )?.is_thuc_hanh
 
-  const selectedSemesterId = semesterId ?? semesters[0]?.id
+  const selectedSemesterId = semesters.some((semester) => semester.id === semesterId)
+    ? semesterId
+    : semesters[0]?.id
+  const selectedSemester = semesters.find((semester) => semester.id === selectedSemesterId)
+  const weekAnchor = useMemo(
+    () => weekAnchorOverride ?? selectedSemester?.start_date ?? toDateString(new Date()),
+    [weekAnchorOverride, selectedSemester?.start_date],
+  )
 
   const scheduleParams = useMemo(() => ({
     ...(selectedSemesterId !== undefined ? { semester_id: selectedSemesterId } : {}),
@@ -240,6 +337,8 @@ export default function TimetablePage() {
   }), [facultyId, majorId, roomId, selectedSemesterId])
   const schedulesQuery = useQuery({
     queryKey: ['schedules', scheduleParams],
+    staleTime: TIMETABLE_SCHEDULES_STALE_TIME,
+    gcTime: TIMETABLE_CACHE_TIME,
     queryFn: async () => {
       const { data } = await apiClient.get<Schedule[]>('/schedules', {
         params: scheduleParams,
@@ -258,10 +357,10 @@ export default function TimetablePage() {
       return data
     },
     enabled: automaticScheduleOpen && selectedSemesterId !== undefined,
-    staleTime: 15_000,
+    staleTime: AUTO_SCHEDULE_SCHEDULES_STALE_TIME,
   })
   const schedules = schedulesQuery.data ?? EMPTY_SCHEDULES
-  const scheduleLoading = schedulesQuery.isFetching
+  const scheduleLoading = schedulesQuery.isLoading
   const scheduleError = schedulesQuery.error
     ? getErrorMessage(schedulesQuery.error)
     : null
@@ -273,13 +372,15 @@ export default function TimetablePage() {
 
   const visibleSchedules = useMemo(
     () => schedules.filter((schedule) =>
+      (campusId === undefined ||
+        rooms.find((room) => room.id === schedule.phong_hoc_id)?.campus_id === campusId) &&
       weekDays.some((day) =>
         day.dayOfWeek === schedule.day_of_week &&
         day.date >= schedule.start_date &&
         day.date <= schedule.end_date,
       ),
     ),
-    [schedules, weekDays],
+    [campusId, rooms, schedules, weekDays],
   )
 
   const orderedSlots = useMemo(() => {
@@ -302,10 +403,9 @@ export default function TimetablePage() {
   const shiftWeek = (amount: number) => {
     const nextWeek = new Date(weekStart)
     nextWeek.setDate(nextWeek.getDate() + amount * 7)
-    setWeekAnchor(toDateString(nextWeek))
+    setWeekAnchorOverride(toDateString(nextWeek))
   }
 
-  const selectedSemester = semesters.find((semester) => semester.id === selectedSemesterId)
   const availableMajors = majors.filter(
     (major) => facultyId === undefined || major.khoa_id === facultyId,
   )
@@ -375,7 +475,7 @@ export default function TimetablePage() {
           })
           return data
         },
-        staleTime: 0,
+        staleTime: AUTO_SCHEDULE_SCHEDULES_STALE_TIME,
       })
       setAutomaticScheduleMode('missing')
       setAutomaticScheduleScope('all')
@@ -384,6 +484,7 @@ export default function TimetablePage() {
       setConfirmScheduleReplacement(false)
       setAutomaticScheduleCampusId(undefined)
       setAutomaticScheduleError(null)
+      setAutomaticScheduleJobId(null)
       setAutomaticScheduleOpen(true)
     } catch (error: unknown) {
       messageApi.error(getErrorMessage(error))
@@ -397,10 +498,7 @@ export default function TimetablePage() {
     setAutomaticScheduleLoading(true)
     setAutomaticScheduleError(null)
     try {
-      const { data } = await apiClient.post<{
-        scheduled_count: number
-        replaced_count: number
-      }>(
+      const { data } = await apiClient.post<Pick<ScheduleOptimizationJob, 'job_id' | 'status'>>(
         '/optimization/schedule',
         {
           hoc_ky_id: selectedSemesterId,
@@ -411,12 +509,7 @@ export default function TimetablePage() {
             : { registration_ids: allScopedRegistrationIds }),
         },
       )
-      messageApi.success(
-        `Đã tạo ${data.scheduled_count} lịch cố định hằng tuần, thay thế ${data.replaced_count} lịch cũ.`,
-      )
-      setAutomaticScheduleOpen(false)
-      void queryClient.invalidateQueries({ queryKey: ['schedules'] })
-      void queryClient.invalidateQueries({ queryKey: ['analytics'] })
+      setAutomaticScheduleJobId(data.job_id)
     } catch (error: unknown) {
       setAutomaticScheduleError(getErrorMessage(error))
     } finally {
@@ -533,7 +626,7 @@ export default function TimetablePage() {
         <div>
           <Typography.Title level={3} style={{ margin: 0 }}>Thời khóa biểu</Typography.Title>
           <Typography.Text type="secondary">
-            Xem lịch học theo tuần, học kỳ, khoa, ngành và phòng.
+            Xem lịch học theo tuần, học kỳ, cơ sở, khoa, ngành và phòng.
           </Typography.Text>
         </div>
         <Space wrap>
@@ -586,7 +679,32 @@ export default function TimetablePage() {
               options={semesters.map((semester) => ({ value: semester.id, label: semester.name }))}
               placeholder="Chọn học kỳ"
               style={{ width: '100%', marginTop: 6 }}
-              onChange={(value: number | undefined) => setSemesterId(value)}
+              onChange={(value: number | undefined) => {
+                setSemesterId(value)
+                if (value === undefined) {
+                  window.sessionStorage.removeItem('timetable.semesterId')
+                  setWeekAnchorOverride(undefined)
+                  return
+                }
+                window.sessionStorage.setItem('timetable.semesterId', String(value))
+                const semester = semesters.find((item) => item.id === value)
+                setWeekAnchorOverride(semester?.start_date)
+              }}
+            />
+          </div>
+          <div style={{ minWidth: 200, flex: '1 1 200px' }}>
+            <Typography.Text strong>Cơ sở</Typography.Text>
+            <SearchFilterSelect
+              aria-label="Lọc theo cơ sở"
+              allowClear
+              value={campusId}
+              options={campuses.map((campus) => ({
+                value: campus.id,
+                label: campus.name,
+              }))}
+              placeholder="Tất cả cơ sở"
+              style={{ width: '100%', marginTop: 6 }}
+              onChange={(value: number | undefined) => setCampusId(value)}
             />
           </div>
           <div style={{ minWidth: 200, flex: '1 1 200px' }}>
@@ -637,18 +755,6 @@ export default function TimetablePage() {
               onChange={(value: number | undefined) => setRoomId(value)}
             />
           </div>
-          <div style={{ minWidth: 170 }}>
-            <Typography.Text strong>Tuần có ngày</Typography.Text>
-            <Input
-              aria-label="Chọn ngày trong tuần"
-              type="date"
-              value={weekAnchor}
-              onChange={(event) => {
-                if (event.target.value) setWeekAnchor(event.target.value)
-              }}
-              style={{ marginTop: 6 }}
-            />
-          </div>
         </Flex>
         {selectedSemester && (
           <Typography.Text type="secondary" style={{ display: 'block', marginTop: 12 }}>
@@ -673,8 +779,6 @@ export default function TimetablePage() {
               size="small"
               onClick={() => shiftWeek(1)}
             />
-            <Tag color="blue" style={{ marginInlineEnd: 0 }}>Lý thuyết</Tag>
-            <Tag color="purple" style={{ marginInlineEnd: 0 }}>Thực hành</Tag>
           </Flex>
         }
         styles={{ body: { padding: 12 } }}
@@ -744,28 +848,74 @@ export default function TimetablePage() {
         onCancel={() => {
           setAutomaticScheduleOpen(false)
           setAutomaticScheduleError(null)
+          setAutomaticScheduleJobId(null)
         }}
         onOk={() => void runAutomaticSchedule()}
         okText="Bắt đầu xếp lịch"
         cancelText="Hủy"
-        confirmLoading={automaticScheduleLoading}
+        confirmLoading={
+          automaticScheduleLoading ||
+          automaticScheduleIsRunning
+        }
         okButtonProps={{
           disabled:
             automaticScheduleRegistrations.length === 0 ||
             automaticScheduleCampusId === undefined ||
+            automaticScheduleIsRunning ||
             (automaticScheduleMode === 'all' && !confirmScheduleReplacement),
         }}
         width={640}
         destroyOnHidden
       >
         <Space direction="vertical" size="middle" style={{ display: 'flex' }}>
-          {automaticScheduleError && (
+          {displayedAutomaticScheduleError && (
             <Alert
               type="error"
               showIcon
               message="Không thể hoàn thành phân bổ"
               description={
-                <div style={{ whiteSpace: 'pre-line' }}>{automaticScheduleError}</div>
+                <div style={{ whiteSpace: 'pre-line' }}>{displayedAutomaticScheduleError}</div>
+              }
+            />
+          )}
+          {automaticScheduleIsRunning && (
+            <Alert
+              type="info"
+              showIcon
+              message="Đang tối ưu lịch"
+              description="Tác vụ đang chạy ở chế độ nền. Bạn có thể chờ kết quả tại đây."
+            />
+          )}
+          {automaticScheduleResult && (
+            <Alert
+              type={automaticScheduleResult.unscheduled_count > 0 ? 'warning' : 'success'}
+              showIcon
+              message={automaticScheduleResult.message}
+              description={
+                <div>
+                  <div>
+                    Trạng thái solver: {automaticScheduleResult.solver_status}; khoảng cách tối ưu
+                    phòng: {(automaticScheduleResult.relative_gap * 100).toFixed(1)}%.
+                  </div>
+                  {automaticScheduleResult.unscheduled_count > 0 && (
+                    <>
+                      <ul style={{ marginBottom: 0, paddingInlineStart: 20 }}>
+                        {automaticScheduleResult.unscheduled_requirements
+                          .slice(0, 20)
+                          .map((requirement) => (
+                            <li key={requirement.meeting_type + requirement.label}>
+                              {requirement.label} ({requirement.meeting_type}): {requirement.reason}
+                            </li>
+                          ))}
+                      </ul>
+                      {automaticScheduleResult.unscheduled_count > 20 && (
+                        <div>
+                          Còn {automaticScheduleResult.unscheduled_count - 20} buổi chưa được liệt kê.
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               }
             />
           )}
@@ -779,11 +929,13 @@ export default function TimetablePage() {
                 label: campus.name,
               }))}
               placeholder="Chọn cơ sở"
+              disabled={automaticScheduleIsRunning}
               style={{ width: '100%', marginTop: 6 }}
               onChange={(value: number | undefined) => {
                 setAutomaticScheduleCampusId(value)
                 setConfirmScheduleReplacement(false)
                 setAutomaticScheduleError(null)
+                setAutomaticScheduleJobId(null)
               }}
             />
             {automaticScheduleCampusId !== undefined && (
@@ -797,16 +949,18 @@ export default function TimetablePage() {
             <Typography.Text strong>Phạm vi đăng ký cần phân bổ</Typography.Text>
             <Radio.Group
               value={automaticScheduleScope}
+              disabled={automaticScheduleIsRunning}
               onChange={(event) => {
                 setAutomaticScheduleScope(event.target.value)
                 setConfirmScheduleReplacement(false)
                 setAutomaticScheduleError(null)
+                setAutomaticScheduleJobId(null)
               }}
               style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}
               options={[
-                { value: 'all', label: 'Toàn bộ đăng ký trong kỳ' },
+                // { value: 'all', label: 'Toàn bộ đăng ký trong kỳ' },
                 { value: 'faculty', label: 'Theo khoa' },
-                { value: 'registrations', label: 'Chọn lớp / môn' },
+                // { value: 'registrations', label: 'Chọn lớp / môn' },
               ]}
             />
             {automaticScheduleScope === 'faculty' && (
@@ -815,6 +969,7 @@ export default function TimetablePage() {
                   mode="multiple"
                   aria-label="Chọn khoa cần phân bổ"
                   placeholder="Chọn một hoặc nhiều khoa"
+                  disabled={automaticScheduleIsRunning}
                   value={automaticScheduleFacultyIds}
                   options={faculties.map((faculty) => ({
                     value: faculty.id,
@@ -824,6 +979,7 @@ export default function TimetablePage() {
                     setAutomaticScheduleFacultyIds(values)
                     setConfirmScheduleReplacement(false)
                     setAutomaticScheduleError(null)
+                    setAutomaticScheduleJobId(null)
                   }}
                   style={{ width: '100%', marginTop: 8 }}
                   optionFilterProp="label"
@@ -840,6 +996,7 @@ export default function TimetablePage() {
                 mode="multiple"
                 aria-label="Chọn đăng ký lớp và môn học"
                 placeholder="Chọn lớp / môn học"
+                disabled={automaticScheduleIsRunning}
                 value={automaticScheduleRegistrationIds}
                 options={semesterRegistrations.map((registration) => {
                   const schoolClass = classes.find((item) => item.id === registration.lop_id)
@@ -855,6 +1012,7 @@ export default function TimetablePage() {
                   setAutomaticScheduleRegistrationIds(values)
                   setConfirmScheduleReplacement(false)
                   setAutomaticScheduleError(null)
+                  setAutomaticScheduleJobId(null)
                 }}
                 style={{ width: '100%', marginTop: 8 }}
                 optionFilterProp="label"
@@ -872,6 +1030,7 @@ export default function TimetablePage() {
           </Typography.Text>
           <Radio.Group
             value={automaticScheduleMode}
+            disabled={automaticScheduleIsRunning}
             optionType="button"
             buttonStyle="solid"
             options={[
@@ -882,6 +1041,7 @@ export default function TimetablePage() {
               setAutomaticScheduleMode(event.target.value)
               setConfirmScheduleReplacement(false)
               setAutomaticScheduleError(null)
+              setAutomaticScheduleJobId(null)
             }}
           />
           {automaticScheduleMode === 'all' && (
@@ -894,6 +1054,7 @@ export default function TimetablePage() {
               />
               <Checkbox
                 checked={confirmScheduleReplacement}
+                disabled={automaticScheduleIsRunning}
                 onChange={(event) => setConfirmScheduleReplacement(event.target.checked)}
               >
                 Tôi xác nhận phân bổ lại các đăng ký trong phạm vi đã chọn
@@ -1279,12 +1440,6 @@ function FragmentRow({
                       GV: {schedule.teacher_name?.trim() || 'Chưa cập nhật'}
                     </Typography.Text>
                     <Flex align="center" justify="space-between" gap={6} style={{ marginTop: 7 }}>
-                      <Tag
-                        color={schedule.is_thuc_hanh ? 'purple' : 'blue'}
-                        style={{ marginInlineEnd: 0, flexShrink: 0 }}
-                      >
-                        {schedule.is_thuc_hanh ? 'Thực hành' : 'Lý thuyết'}
-                      </Tag>
                       <Flex align="center" gap={4} style={{ color: '#64748b', fontSize: 12 }}>
                         <EditOutlined aria-hidden="true" />
                         <span>Chỉnh sửa</span>

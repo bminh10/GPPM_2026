@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from db.database import Campus, PhongHoc, get_db
 from utils.commit import commit_db
+from utils.audit_details import record_update_details
 from typing import Optional
 
 router = APIRouter(prefix="/campus", tags=["Campus"])
@@ -41,7 +42,7 @@ def create_campus(data: CampusData, db: Session = Depends(get_db)):
     
 @router.get("/all", response_model=list[CampusResponse])
 def get_all_campus(db: Session = Depends(get_db)):
-    return db.query(Campus).order_by(Campus.id).all()
+    return db.query(Campus).order_by(Campus.name).all()
 
 @router.get("/{id}", response_model=CampusResponse)
 def get_campus_byId(id: int, db: Session = Depends(get_db)):
@@ -55,7 +56,7 @@ def get_campus_byId(id: int, db: Session = Depends(get_db)):
     return campus
 
 @router.patch("/{id}", response_model=CampusResponse)
-def refactor_campus(id: int, data: CampusUpdate, db: Session = Depends(get_db)):
+def refactor_campus(id: int, data: CampusUpdate, request: Request, db: Session = Depends(get_db)):
     
     campus = db.query(Campus).where(Campus.id == id).first()
     if not campus:
@@ -64,6 +65,7 @@ def refactor_campus(id: int, data: CampusUpdate, db: Session = Depends(get_db)):
             detail="Empty!"
         )
     update_data = data.model_dump(exclude_unset=True)
+    record_update_details(request, "campus", campus, id, update_data)
     
     for field, value in update_data.items():
         setattr(campus, field, value)

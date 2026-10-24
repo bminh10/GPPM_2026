@@ -1,22 +1,84 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Card, Flex, Spin } from 'antd'
+import { useQuery } from '@tanstack/react-query'
+import { Alert, Button, Card, Flex, Input, Spin, Tag, Typography } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
 import CampusMap, { type MapFocus } from '../../components/map/CampusMap'
 import BuildingSelector from '../../components/map/BuildingSelector'
 import FloorSelector from '../../components/map/FloorSelector'
 import RoomListPanel from '../../components/map/RoomListPanel'
-import RoomDetailCard from '../../components/map/RoomDetailCard'
+import RoomDetailCard, { type ActiveRoomClass } from '../../components/map/RoomDetailCard'
 import MapLegend from '../../components/map/MapLegend'
-import { loadCampusDataset, type CampusDataset } from '../../data/campusData'
+import {
+  loadCampusDataset,
+  normalizeRoomCode,
+  type Building,
+  type CampusDataset,
+} from '../../data/campusData'
 import { useRoomLighting } from '../../hooks/useRoomLighting'
 import { lightAddress } from '../../services/LightingService'
 import { useAuth } from '../../store/authStore'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 import { placeRoomLights } from '../../data/roomLighting'
+import { apiClient, getErrorMessage } from '../../services/apiClient'
+
+type CampusOption = { id: number; name: string; address: string | null }
+type SemesterOption = { id: number; name: string; start_date: string; end_date: string }
+type DatabaseRoom = {
+  id: number
+  name: string
+  building: string | null
+  capacity: number
+  is_thuc_hanh: boolean
+  campus_id: number
+}
+const EMPTY_CURRENT_CLASSES: ActiveRoomClass[] = []
+const EMPTY_DATABASE_ROOMS: DatabaseRoom[] = []
+
+function bearingTowardNearestBuilding(
+  target: Building,
+  buildings: Building[],
+): number | undefined {
+  const nearestBuilding = buildings
+    .filter((building) => building.id !== target.id)
+    .sort((left, right) => {
+      const distance = (building: Building) =>
+        Math.hypot(
+          (building.center[0] - target.center[0]) *
+            Math.cos((target.center[1] * Math.PI) / 180),
+          building.center[1] - target.center[1],
+        )
+      return distance(left) - distance(right)
+    })[0]
+
+  if (!nearestBuilding) return undefined
+  return (
+    (Math.atan2(
+      (nearestBuilding.center[0] - target.center[0]) *
+        Math.cos((target.center[1] * Math.PI) / 180),
+      nearestBuilding.center[1] - target.center[1],
+    ) *
+      180) /
+    Math.PI
+  )
+}
+
+function localDate(value: Date) {
+  return [
+    value.getFullYear(),
+    String(value.getMonth() + 1).padStart(2, '0'),
+    String(value.getDate()).padStart(2, '0'),
+  ].join('-')
+}
 
 export default function Map() {
   const [dataset, setDataset] = useState<CampusDataset | null>(null)
   const [campusId, setCampusId] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState(() => localDate(new Date()))
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [campusOptions, setCampusOptions] = useState<CampusOption[]>([])
+  const [semesters, setSemesters] = useState<SemesterOption[]>([])
+  const [selectedSemesterId, setSelectedSemesterId] = useState<number>()
+  const [referenceError, setReferenceError] = useState<string | null>(null)
   const lighting = useRoomLighting()
   const { user } = useAuth()
   const canControl = ['admin', 'superadmin'].includes(user?.role?.replace(/\s/g, '').toLowerCase() ?? '')
@@ -27,6 +89,22 @@ export default function Map() {
       setCampusId(d.campuses[0]?.id ?? null)
     }).catch((error: unknown) => {
       setLoadError(error instanceof Error ? error.message : 'Không thể tải dữ liệu bản đồ')
+    })
+    void Promise.all([
+      apiClient.get<CampusOption[]>('/campus/all'),
+      apiClient.get<SemesterOption[]>('/semesters'),
+    ]).then(([campusResponse, semesterResponse]) => {
+      setCampusOptions(campusResponse.data)
+      setSemesters(semesterResponse.data)
+      const today = localDate(new Date())
+      const currentSemester = semesterResponse.data.find(
+        (semester) => semester.start_date <= today && semester.end_date >= today,
+      )
+      const initialSemester = currentSemester ?? semesterResponse.data[0]
+      setSelectedSemesterId(initialSemester?.id)
+      if (initialSemester) setSelectedDate(initialSemester.start_date)
+    }).catch((error: unknown) => {
+      setReferenceError(getErrorMessage(error))
     })
   }, [])
 
@@ -42,12 +120,58 @@ export default function Map() {
   return (
     <Flex vertical gap={8}>
       {lighting.error && <Alert type="error" showIcon title="Không đồng bộ được đèn" description={lighting.error} />}
+      {referenceError && (
+        <Alert type="error" showIcon title="Không tải được dữ liệu cơ sở" description={referenceError} />
+      )}
       <Alert type="info" showIcon title="Đèn IoT mô phỏng · Trạng thái chỉ được xác nhận sau khi ESP32 báo về. Thiết bị cần chạy Wokwi." />
+      <Card size="small">
+        <Flex align="center" justify="space-between" gap={16} wrap>
+          <Flex align="center" gap={8}>
+            <Typography.Text strong>Học kỳ:</Typography.Text>
+            <SearchFilterSelect
+              aria-label="Chọn học kỳ xem lịch phòng"
+              value={selectedSemesterId}
+              onChange={(semesterId: number) => {
+                setSelectedSemesterId(semesterId)
+                const semester = semesters.find((item) => item.id === semesterId)
+                if (semester) setSelectedDate(semester.start_date)
+              }}
+              options={semesters.map((semester) => ({
+                label: semester.name,
+                value: semester.id,
+              }))}
+              placeholder="Chọn học kỳ"
+              style={{ width: 220 }}
+              disabled={semesters.length === 0}
+            />
+            <Typography.Text strong>Ngày xem lịch:</Typography.Text>
+            <Input
+              aria-label="Chọn ngày xem lịch phòng"
+              type="date"
+              value={selectedDate}
+              onChange={(event) => {
+                if (event.target.value) setSelectedDate(event.target.value)
+              }}
+              style={{ width: 180 }}
+            />
+            <Button onClick={() => setSelectedDate(localDate(new Date()))}>Hôm nay</Button>
+          </Flex>
+          <Flex align="center" gap={8}>
+            <Tag color="#1677ff">Có lịch trong ngày</Tag>
+            <Typography.Text type="secondary">
+              Lịch phòng theo ngày đã chọn · tự cập nhật mỗi 30 giây
+            </Typography.Text>
+          </Flex>
+        </Flex>
+      </Card>
     <CampusView
       key={campusId}
       dataset={dataset}
       campusId={campusId}
       onChangeCampus={setCampusId}
+      campusOptions={campusOptions}
+      semesterId={selectedSemesterId}
+      selectedDate={selectedDate}
       lighting={lighting}
       canControl={canControl}
     />
@@ -59,40 +183,155 @@ type ViewProps = {
   dataset: CampusDataset
   campusId: string
   onChangeCampus: (id: string) => void
+  campusOptions: CampusOption[]
+  semesterId: number | undefined
+  selectedDate: string
   lighting: ReturnType<typeof useRoomLighting>
   canControl: boolean
 }
 
-function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }: ViewProps) {
+function CampusView({
+  dataset,
+  campusId,
+  onChangeCampus,
+  campusOptions,
+  semesterId,
+  selectedDate,
+  lighting,
+  canControl,
+}: ViewProps) {
   const campus = dataset.campuses.find((c) => c.id === campusId)!
   const buildings = useMemo(() => dataset.buildings.filter((b) => b.campusId === campusId), [dataset, campusId])
+  const databaseRoomsQuery = useQuery({
+    queryKey: ['map', 'database-rooms'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<DatabaseRoom[]>('/rooms')
+      return data
+    },
+  })
+  const databaseRooms = databaseRoomsQuery.data ?? EMPTY_DATABASE_ROOMS
+  const inferredDatabaseCampusId = useMemo(() => {
+    const aliases =
+      campusId === 'CS1'
+        ? ['vo van tan']
+        : campusId === 'CS3'
+          ? ['nha be', 'nhon duc']
+          : []
+    const normalize = (value: string) =>
+      value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/đ/g, 'd')
+    const namedCampus = campusOptions.find((option) => {
+      const value = normalize(`${option.name} ${option.address ?? ''}`)
+      return aliases.some((alias) => value.includes(alias))
+    })
+    if (namedCampus) return namedCampus.id
+
+    const mapRoomCodes = new Set(
+      dataset.rooms
+        .filter((room) => room.campusId === campusId)
+        .map((room) => normalizeRoomCode(room.code)),
+    )
+    const campusScores = new globalThis.Map<number, number>()
+    databaseRooms.forEach((room) => {
+      if (mapRoomCodes.has(normalizeRoomCode(room.name))) {
+        campusScores.set(room.campus_id, (campusScores.get(room.campus_id) ?? 0) + 1)
+      }
+    })
+    const bestMatch = [...campusScores.entries()].sort((left, right) => right[1] - left[1])
+    if (bestMatch.length > 0 && (!bestMatch[1] || bestMatch[0][1] > bestMatch[1][1])) {
+      return bestMatch[0][0]
+    }
+  }, [campusId, campusOptions, databaseRooms, dataset.rooms])
+  const databaseCampusId = inferredDatabaseCampusId
   const rooms = useMemo(() => {
     const campusRooms = dataset.rooms.filter((room) => room.campusId === campusId)
     const reportedLights = Object.values(lighting.lights).filter((light) => light.campus_id === campusId)
 
-    return campusRooms.map((room) => {
-      const configuredIds = new Set(room.lights.map((light) => light.id))
-      const additionalLights = reportedLights.filter(
-        (light) => light.room_id === room.id && !configuredIds.has(light.light_id),
+    return campusRooms.flatMap((mapRoom) => {
+      const databaseRoom = databaseRooms.find(
+        (room) =>
+          room.campus_id === databaseCampusId &&
+          normalizeRoomCode(room.name) === normalizeRoomCode(mapRoom.code),
       )
-      return {
-        ...room,
+      if (!databaseRoom) return []
+      const configuredIds = new Set(mapRoom.lights.map((light) => light.id))
+      const additionalLights = reportedLights.filter(
+        (light) => light.room_id === mapRoom.id && !configuredIds.has(light.light_id),
+      )
+      return [{
+        ...mapRoom,
+        databaseRoomId: databaseRoom.id,
+        code: databaseRoom.name,
+        name: databaseRoom.name,
+        databaseBuilding: databaseRoom.building,
+        capacity: databaseRoom.capacity,
+        occupancy: 0,
         lights: [
-          ...room.lights,
+          ...mapRoom.lights,
           ...placeRoomLights(
             additionalLights.map((light) => ({ id: light.light_id, name: light.light_id })),
-            room.polygon,
+            mapRoom.polygon,
           ),
         ],
-      }
+      }]
     })
-  }, [dataset, campusId, lighting.lights])
+  }, [campusId, databaseCampusId, databaseRooms, dataset, lighting.lights])
+  const roomStatusQuery = useQuery({
+    queryKey: ['map', 'room-status', databaseCampusId, semesterId, selectedDate],
+    enabled: databaseCampusId !== undefined && semesterId !== undefined,
+    queryFn: async () => {
+      if (databaseCampusId === undefined || semesterId === undefined) {
+        throw new Error('Cần chọn cơ sở database và học kỳ để tải lịch phòng.')
+      }
+      const { data } = await apiClient.get<ActiveRoomClass[]>('/schedules/room-status', {
+        params: {
+          campus_id: databaseCampusId,
+          semester_id: semesterId,
+          date: selectedDate,
+        },
+      })
+      return data
+    },
+    refetchInterval: 30_000,
+  })
+  const currentClasses = roomStatusQuery.data ?? EMPTY_CURRENT_CLASSES
+  const scheduleError = roomStatusQuery.error
+    ? getErrorMessage(roomStatusQuery.error)
+    : null
+  const scheduleLoading = roomStatusQuery.isFetching
+  const visibleCurrentClasses =
+    databaseCampusId !== undefined
+      ? currentClasses
+      : EMPTY_CURRENT_CLASSES
+  const scheduledRoomNames = useMemo(() => {
+    const scheduledRoomIds = new Set(visibleCurrentClasses.map((item) => item.room_id))
+    return rooms
+      .filter((room) => room.databaseRoomId !== undefined && scheduledRoomIds.has(room.databaseRoomId))
+      .map((room) => room.code)
+  }, [rooms, visibleCurrentClasses])
+  const statusError =
+    databaseRoomsQuery.error
+      ? getErrorMessage(databaseRoomsQuery.error)
+      : databaseCampusId === undefined
+          ? databaseRoomsQuery.isSuccess
+            ? `Không tự xác định được cơ sở database cho ${campus.name}. Hãy chọn cơ sở database bên dưới.`
+            : null
+          : databaseRoomsQuery.isSuccess && rooms.length === 0
+            ? `Chưa ghép được phòng trong ${campus.name}. Hãy chọn đúng cơ sở database bên dưới hoặc kiểm tra tên phòng trong database.`
+          : semesterId === undefined
+            ? null
+            : scheduleError
 
   // Mặc định chưa chọn tòa nào: hiển thị toàn khuôn viên
   const [buildingId, setBuildingId] = useState<string | null>(null)
   const [floor, setFloor] = useState(1)
   const [roomId, setRoomId] = useState<string | null>(null)
-  const [focus, setFocus] = useState<MapFocus | null>(null)
+  const [focus, setFocus] = useState<MapFocus | null>(() => ({
+    center: campus.center,
+    zoom: campus.zoom - 1,
+    offset: [0, 0],
+    pitch: 45,
+    key: Date.now(),
+  }))
 
   const building = buildings.find((b) => b.id === buildingId) ?? null
   const selectedRoom = rooms.find((r) => r.id === roomId) ?? null
@@ -112,13 +351,25 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
       const room = rooms.find((r) => r.id === id)
       if (!room) return
       const roomBuilding = buildings.find((item) => item.id === room.buildingId)
+      const roomBearing = roomBuilding
+        ? (Math.atan2(
+            (room.center[0] - roomBuilding.center[0]) *
+              Math.cos((room.center[1] * Math.PI) / 180),
+            room.center[1] - roomBuilding.center[1],
+          ) *
+            180) /
+          Math.PI
+        : undefined
       setBuildingId(room.buildingId)
       setFloor(room.floor)
       setRoomId(room.id)
       setFocus({
         center: room.center,
         key: Date.now(),
-        zoom: 20.7,
+        zoom: 18.7,
+        pitch: 40,
+        bearing: roomBearing,
+        offset: [-60, 0],
         elevation: roomBuilding
           ? (room.floor - 1) * roomBuilding.floorHeight * 2.5 +
             0.4 * 2.5 +
@@ -136,7 +387,12 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
       setBuildingId(id)
       setFloor(1)
       setRoomId(null)
-      setFocus({ center: target.center, key: Date.now() })
+      setFocus({
+        center: target.center,
+        key: Date.now(),
+        bearing: bearingTowardNearestBuilding(target, buildings),
+        pitch: 40,
+      })
     },
     [buildings],
   )
@@ -145,7 +401,26 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
     setBuildingId(null)
     setFloor(1)
     setRoomId(null)
-    setFocus({ center: campus.center, zoom: campus.zoom, key: Date.now() })
+    setFocus({
+      center: campus.center,
+      zoom: campus.zoom - 1,
+      offset: [0, 0],
+      pitch: 45,
+      key: Date.now(),
+    })
+  }, [campus])
+
+  const selectCampusGround = useCallback(() => {
+    setBuildingId(null)
+    setFloor(1)
+    setRoomId(null)
+    setFocus({
+      center: campus.center,
+      zoom: campus.zoom - 1,
+      offset: [-1000, 0],
+      pitch: 45,
+      key: Date.now(),
+    })
   }, [campus])
 
   const selectFloor = (f: number) => {
@@ -155,6 +430,9 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
     setFocus({
       center: building.center,
       key: Date.now(),
+      zoom: 18.7 - (f - 1) * 0.25,
+      bearing: bearingTowardNearestBuilding(building, buildings),
+      pitch: 40,
       elevation: (f - 1 + 0.5) * building.floorHeight * 2.5,
     })
   }
@@ -169,6 +447,27 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
         overflow: 'hidden',
       }}
     >
+      {statusError && (
+        <Alert
+          type="error"
+          showIcon
+          title="Không tải được trạng thái lớp học"
+          description={statusError}
+          action={
+            databaseCampusId !== undefined && (
+              <Button
+                size="small"
+                icon={<ReloadOutlined />}
+                loading={roomStatusQuery.isFetching}
+                onClick={() => void roomStatusQuery.refetch()}
+              >
+                Thử lại
+              </Button>
+            )
+          }
+          style={{ position: 'absolute', top: 16, right: 16, zIndex: 3, maxWidth: 420 }}
+        />
+      )}
       <Flex style={{ position: 'absolute', inset: 0 }}>
         <CampusMap
           campus={campus}
@@ -177,10 +476,11 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
           selectedBuildingId={buildingId}
           selectedFloor={floor}
           selectedRoomId={roomId}
+          activeRoomNames={scheduledRoomNames}
           focus={focus}
           onSelectRoom={selectRoom}
           onSelectBuilding={selectBuilding}
-          onSelectNone={selectNone}
+          onSelectCampusGround={selectCampusGround}
           isRoomLightOn={isRoomLightOn}
           onToggleRoomLight={toggleLight}
         />
@@ -194,10 +494,12 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
         {dataset.campuses.length > 1 && (
           <Card className="glass" size="small" styles={{ body: { padding: 8 } }}>
             <SearchFilterSelect
+              aria-label="Chọn khuôn viên bản đồ"
               style={{ width: '100%' }}
               value={campusId}
               onChange={onChangeCampus}
               options={dataset.campuses.map((c) => ({ label: c.name, value: c.id }))}
+              placeholder="Chọn khuôn viên bản đồ"
             />
           </Card>
         )}
@@ -205,6 +507,7 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
         <RoomListPanel
           rooms={rooms}
           buildings={buildings}
+          scheduledRoomNames={scheduledRoomNames}
           selectedRoomId={roomId}
           onSelectRoom={selectRoom}
         />
@@ -221,6 +524,11 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
           <RoomDetailCard
             room={selectedRoom}
             buildingName={building?.name ?? ''}
+            currentClasses={visibleCurrentClasses.filter(
+              (item) => item.room_id === selectedRoom.databaseRoomId,
+            )}
+            scheduleLoading={scheduleLoading}
+            scheduleError={scheduleError}
             isLightOn={(lightId) => isRoomLightOn(selectedRoom.id, lightId)}
             onToggleLight={(lightId) => toggleLight(selectedRoom.id, lightId)}
             getLightStatus={(lightId) => lighting.lights[lightAddress(campusId, selectedRoom.id, lightId)]}

@@ -62,7 +62,7 @@ export default function AuthHero() {
         >
           <EnvironmentOutlined />
         </div>
-        <span className="text-xl font-bold tracking-wide text-white">CampusOpt</span>
+        <span className="text-xl font-bold tracking-wide text-white">SmartOU</span>
       </div>
 
       <div className="relative z-10 flex flex-1 items-center justify-center px-10">

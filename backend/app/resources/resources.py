@@ -30,6 +30,7 @@ class AuditLogResponse(BaseModel):
     method: str
     path: str
     status_code: int
+    details: dict[str, object] | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -46,24 +47,22 @@ def get_current_user():
 
 @router.get("/users", response_model=list[UserResponse])
 def get_users(db: Session = Depends(get_db)):
-    return db.query(User).order_by(User.id).all()
+    return db.query(User).order_by(User.user_name, User.email).all()
 
 
 @router.get("/roles", response_model=list[RoleResponse])
 def get_roles(db: Session = Depends(get_db)):
-    return db.query(Role).order_by(Role.id).all()
+    return db.query(Role).order_by(Role.name).all()
 
 
 @router.get("/audit-logs", response_model=list[AuditLogResponse])
 def get_audit_logs(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
+    path_prefix: str | None = Query(default=None, min_length=1, max_length=100),
     db: Session = Depends(get_db),
 ):
-    return (
-        db.query(AuditLog)
-        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    query = db.query(AuditLog)
+    if path_prefix:
+        query = query.filter(AuditLog.path.startswith(path_prefix))
+    return query.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit).all()
