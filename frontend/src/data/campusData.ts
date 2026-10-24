@@ -246,8 +246,8 @@ export function parseCampusGeoJSON(collection: { features: unknown[] }): CampusD
 /** Nguồn dữ liệu duy nhất: sau này thay bằng gọi API FastAPI trả cùng định dạng GeoJSON. */
 export async function loadCampusDataset(): Promise<CampusDataset> {
   const campuses = [
+    facilityFeatures('CS3', 'Cơ sở 3 - Nhà Bè', cs3Buildings, cs3Rooms),
     facilityFeatures('CS1', 'Cơ sở 1 - 97 Võ Văn Tần', cs1Buildings, cs1Rooms),
-    facilityFeatures('CS3', 'Cơ sở 3', cs3Buildings, cs3Rooms),
   ]
   return {
     campuses: campuses.flatMap((dataset) => dataset.campuses),

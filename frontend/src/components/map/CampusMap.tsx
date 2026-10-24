@@ -71,6 +71,7 @@ type CampusMapProps = {
   selectedBuildingId: string | null
   selectedFloor: number
   selectedRoomId: string | null
+  activeRoomNames: string[]
   focus: MapFocus | null
   onSelectRoom: (roomId: string) => void
   onSelectBuilding: (buildingId: string) => void
@@ -96,6 +97,7 @@ export default function CampusMap({
   selectedBuildingId,
   selectedFloor,
   selectedRoomId,
+  activeRoomNames,
   focus,
   onSelectRoom,
   onSelectBuilding,
@@ -194,6 +196,7 @@ export default function CampusMap({
 
   const layers = useMemo(() => {
     const primary = colors.primary.DEFAULT
+    const activeRoomNameSet = new Set(activeRoomNames.map((name) => name.toLocaleUpperCase()))
     const selectedBuilding: Building | undefined = BUILDINGS.find((b) => b.id === selectedBuildingId)
 
     // Các tòa không được chọn: khối nổi tổng thể
@@ -342,7 +345,12 @@ export default function CampusMap({
         getPolygon: (r) => withZ(r.polygon, floorBase),
         getElevation: roomElevation,
         getFillColor: (r) =>
-          hexToRgba(ROOM_STATE_META[getRoomState(r)].color, r.id === selectedRoomId ? 255 : 215),
+          hexToRgba(
+            activeRoomNameSet.has(r.code.toLocaleUpperCase())
+              ? '#1677ff'
+              : ROOM_STATE_META[getRoomState(r)].color,
+            r.id === selectedRoomId ? 255 : 215,
+          ),
         getLineColor: (r) =>
           r.id === selectedRoomId ? hexToRgba('#ffffff', 255) : hexToRgba('#ffffff', 160),
         lineWidthMinPixels: 1.5,
@@ -351,7 +359,7 @@ export default function CampusMap({
         highlightColor: hexToRgba('#ffffff', 90),
         onClick: (info) => info.object && onSelectRoom(info.object.id),
         updateTriggers: {
-          getFillColor: [selectedRoomId],
+          getFillColor: [selectedRoomId, activeRoomNames],
           getLineColor: [selectedRoomId],
           getElevation: [selectedRoomId],
         },
@@ -361,7 +369,13 @@ export default function CampusMap({
         data: openRoom ? [openRoom] : [],
         stroked: false,
         getPolygon: (r) => withZ(r.polygon, floorBase + 0.05),
-        getFillColor: (r) => hexToRgba(ROOM_STATE_META[getRoomState(r)].color, 130),
+        getFillColor: (r) =>
+          hexToRgba(
+            activeRoomNameSet.has(r.code.toLocaleUpperCase())
+              ? '#1677ff'
+              : ROOM_STATE_META[getRoomState(r)].color,
+            130,
+          ),
         pickable: true,
         onClick: (info) => info.object && onSelectRoom(info.object.id),
       }),
@@ -470,6 +484,7 @@ export default function CampusMap({
     selectedBuildingId,
     selectedFloor,
     selectedRoomId,
+    activeRoomNames,
     hotspotOffset,
     onSelectRoom,
     onSelectBuilding,
