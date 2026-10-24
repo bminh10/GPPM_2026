@@ -22,6 +22,8 @@ from middleware.audit import AuditLogMiddleware
 from middleware.auth import AuthMiddleware
 from app.lighting.router import router as routerLighting, device_router
 from app.cards.router import router as routerCards
+from app.cards.writer import router as routerCardWriter
+from app.cards.attendance import router as routerCardAttendance
 
 app = FastAPI(version="1.0")
 
@@ -45,6 +47,8 @@ for router in (
     routerLighting,
     device_router,
     routerCards,
+    routerCardWriter,
+    routerCardAttendance,
 ):
     app.include_router(router)
 

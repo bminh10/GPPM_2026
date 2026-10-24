@@ -1,0 +1,8 @@
+#pragma once
+#define READER_WIFI_SSID ""
+#define READER_WIFI_PASSWORD ""
+#define READER_ID "card-writer-01"
+#define READER_API_URL "http://REPLACE_WITH_PC_LAN_IP:8000"
+#define READER_DEVICE_KEY "CONFIGURE_USING_SETUP_SCRIPT"
+#define READER_ALLOW_LAN_HTTP true
+#define READER_ROOT_CA ""

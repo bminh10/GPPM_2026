@@ -1,7 +1,8 @@
 import { Layout, Menu, Flex, Typography } from 'antd'
 import { BankOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { menuItems } from '../../routes/menuConfig'
+import { menuItems, ROUTE_PATHS } from '../../routes/menuConfig'
+import { useAuth } from '../../store/authStore'
 
 type AppSiderProps = {
   collapsed: boolean
@@ -11,6 +12,8 @@ type AppSiderProps = {
 export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const { user } = useAuth()
+  const isAdmin = ['admin', 'superadmin'].includes(user?.role?.replace(/\s/g, '').toLowerCase() ?? '')
 
   return (
     <Layout.Sider
@@ -33,7 +36,7 @@ export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
         theme="dark"
         mode="inline"
         selectedKeys={[pathname]}
-        items={menuItems}
+        items={menuItems.filter((item) => isAdmin || item?.key !== ROUTE_PATHS.cardWriter)}
         onClick={({ key }) => navigate(key)}
       />
     </Layout.Sider>

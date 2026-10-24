@@ -20,7 +20,8 @@ from app.lighting import energy, service
 from app.lighting.service import OFFLINE_SECONDS, COMMAND_TIMEOUT_SECONDS
 from core.crypto import seal
 from core.security import create_token
-from db.database import Base, Role, SessionLocal, User, engine
+from db.database import Base, Campus, Role, SessionLocal, User, engine
+from app.cards.attendance import AttendanceStation, AttendanceLog, AttendanceSession
 from main import app
 
 KEY = "test-only-device-key-not-a-real-secret-12345"
@@ -36,6 +37,8 @@ class LightingTests(unittest.TestCase):
         Base.metadata.create_all(engine)
         with SessionLocal.begin() as db:
             db.add_all([Role(id=1, name="Super Admin"), Role(id=2, name="User")])
+            db.add(AttendanceStation(reader_id="test-reader"))
+            db.add(Campus(id=1, name="Cơ sở kiểm thử", address="Test campus"))
             db.flush()
             db.add_all([
                 User(id=1, user_name="admin", email="admin@example.test", role_id=1),
@@ -65,6 +68,79 @@ class LightingTests(unittest.TestCase):
     def headers(self, room="a101"):
         return {"X-Device-Id": f"esp32-{room}", "X-Device-Key": KEY}
 
+    def test_writer_admin_authorization_uid_binding_and_verified_readback(self):
+        from app.cards.writer import WriterStation, WriteJob
+        with SessionLocal.begin() as db:
+            db.add(WriterStation(id="test-writer", seen_at=0, last_seen=0, card_type=""))
+        headers = {"X-Writer-Id": "test-writer", "X-Writer-Key": KEY}
+        identity = {"uid": "01:02:03:04", "card_type": "MIFARE 1KB"}
+        authorization = {"uid": identity["uid"], "mssv": "2451010001", "confirm_owned_card": True}
+        with patch.dict(os.environ, {"CARD_WRITER_ID": "test-writer", "CARD_WRITER_KEY": KEY}):
+            self.assertFalse(self.client.get("/card-writer").json()["fresh_card"])
+            self.assertEqual(self.client.post("/card-writer/jobs", json=authorization).status_code, 409)
+            self.assertEqual(self.client.post("/iot/card-writer/present", headers=headers, json=identity).status_code, 200)
+            self.assertTrue(self.client.get("/card-writer").json()["fresh_card"])
+            self.assertEqual(self.client.post("/card-writer/jobs", json={**authorization, "mssv": "245101xxxx"}).status_code, 422)
+            self.assertEqual(self.client.post("/card-writer/jobs", json={**authorization, "confirm_owned_card": False}).status_code, 422)
+            self.login(2)
+            self.assertEqual(self.client.get("/card-writer").status_code, 403)
+            self.assertEqual(self.client.post("/card-writer/jobs", json=authorization).status_code, 403)
+            self.login(1)
+            created = self.client.post("/card-writer/jobs", json=authorization)
+            self.assertEqual(created.status_code, 200, created.text)
+            job_id = created.json()["id"]
+            self.assertEqual(self.client.post("/card-writer/jobs", json=authorization).status_code, 409)
+            self.client.cookies.clear()
+            self.assertEqual(self.client.post("/iot/card-writer/claim", headers={**headers, "X-Writer-Key": "wrong" * 8}, json=identity).status_code, 401)
+            self.assertEqual(self.client.post("/iot/card-writer/claim", headers=headers, json={**identity, "uid": "11:22:33:44"}).status_code, 409)
+            claim = self.client.post("/iot/card-writer/claim", headers=headers, json=identity)
+            self.assertEqual(claim.status_code, 200, claim.text)
+            self.assertEqual(claim.json()["mssv"], "2451010001")
+            self.assertEqual(claim.json()["block"], 4)
+            self.assertEqual(self.client.post("/iot/card-writer/claim", headers=headers, json=identity).status_code, 409)
+            result = {"job_id": job_id, "uid": identity["uid"], "success": True, "data_hex": "00" * 16, "detail": "Read back"}
+            self.assertEqual(self.client.post("/iot/card-writer/result", headers=headers, json=result).status_code, 422)
+            result["data_hex"] = (b"2451010001" + bytes(6)).hex().upper()
+            for _ in range(2):
+                self.assertEqual(self.client.post("/iot/card-writer/result", headers=headers, json=result).status_code, 200)
+            self.login(1)
+            status = self.client.get("/card-writer").json()
+            self.assertEqual(status["job"]["state"], "succeeded")
+            with SessionLocal() as db:
+                self.assertEqual(db.get(WriteJob, job_id).admin_id, 1)
+            with SessionLocal.begin() as db:
+                db.get(WriterStation, "test-writer").seen_at -= 61
+            self.assertFalse(self.client.get("/card-writer").json()["fresh_card"])
+            self.assertEqual(self.client.post("/card-writer/jobs", json=authorization).status_code, 409)
+
+    def test_writer_expiry_cancel_and_uncertain_result_recovery(self):
+        from app.cards.writer import WriterStation, WriteJob
+        with SessionLocal.begin() as db:
+            db.add(WriterStation(id="test-writer", seen_at=0, last_seen=0, card_type=""))
+        headers = {"X-Writer-Id": "test-writer", "X-Writer-Key": KEY}
+        identity = {"uid": "01:02:03:04", "card_type": "MIFARE 1KB"}
+        authorization = {"uid": identity["uid"], "mssv": "2451010000", "confirm_owned_card": True}
+        with patch.dict(os.environ, {"CARD_WRITER_ID": "test-writer", "CARD_WRITER_KEY": KEY}):
+            self.client.post("/iot/card-writer/present", headers=headers, json=identity)
+            expired = self.client.post("/card-writer/jobs", json=authorization).json()["id"]
+            with SessionLocal.begin() as db:
+                db.get(WriteJob, expired).created_at -= 121
+            self.assertEqual(self.client.post("/iot/card-writer/claim", headers=headers, json=identity).status_code, 409)
+            self.assertEqual(self.client.get("/card-writer").json()["job"]["state"], "expired")
+            cancelled = self.client.post("/card-writer/jobs", json=authorization).json()["id"]
+            self.assertEqual(self.client.post(f"/card-writer/jobs/{cancelled}/close", json={}).json()["state"], "cancelled")
+            writing = self.client.post("/card-writer/jobs", json=authorization).json()["id"]
+            self.client.post("/iot/card-writer/claim", headers=headers, json=identity)
+            with SessionLocal.begin() as db:
+                db.get(WriteJob, writing).created_at -= 121
+            self.assertEqual(self.client.post(f"/card-writer/jobs/{writing}/close", json={"acknowledge_uncertain": True}).status_code, 409)
+            with SessionLocal.begin() as db:
+                db.get(WriteJob, writing).claimed_at -= 121
+            self.assertEqual(self.client.post(f"/card-writer/jobs/{writing}/close", json={}).status_code, 409)
+            closed = self.client.post(f"/card-writer/jobs/{writing}/close", json={"acknowledge_uncertain": True})
+            self.assertEqual(closed.json()["state"], "unknown")
+            self.assertEqual(self.client.post("/iot/card-writer/claim", headers=headers, json=identity).status_code, 409)
+
     def test_card_reader_read_only_transport_validation_and_permissions(self):
         from app.cards.router import CardScan
         with SessionLocal.begin() as db:
@@ -91,12 +167,174 @@ class LightingTests(unittest.TestCase):
             latest = self.client.get("/card-reader/latest").json()["scan"]
             self.assertEqual(latest["uid"], report["uid"])
             self.assertEqual(latest["data_text"], "1234............")
+            self.assertIsNone(latest["mssv"])
             self.assertFalse(latest["student_verified"])
+            for payload, block, expected in (
+                (b"2451012012" + bytes(6), 4, "2451012012"),
+                (b"2451010001" + bytes(6), 4, "2451010001"),
+                (b"2451010000" + bytes(6), 4, "2451010000"),
+                (b"2451012012" + bytes(6), 5, None),
+                (b"2451022012" + bytes(6), 4, None),
+                (b"24510120X2" + bytes(6), 4, None),
+                (b"2451012012" + b" " * 6, 4, None),
+                (b"2451012012" + bytes(5) + b"\x01", 4, None),
+                (bytes(16), 4, None),
+            ):
+                with self.subTest(payload=payload, block=block):
+                    response = self.client.post("/iot/card-reader/scans", headers=headers, json={
+                        **report, "block": block, "data_hex": payload.hex().upper(),
+                    })
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json()["mssv"], expected)
+                    parsed = self.client.get("/card-reader/latest").json()["scan"]
+                    self.assertEqual(parsed["mssv"], expected)
+                    self.assertFalse(parsed["student_verified"])
             failed = {**report, "read_status": "read_error", "data_hex": None, "detail": "Authentication failed"}
             self.assertEqual(self.client.post("/iot/card-reader/scans", headers=headers, json=failed).status_code, 200)
             self.assertEqual(self.client.get("/card-reader/latest").json()["scan"]["read_status"], "read_error")
+            self.assertIsNone(self.client.get("/card-reader/latest").json()["scan"]["mssv"])
             with SessionLocal() as db:
                 self.assertEqual(db.query(CardScan).count(), 1)
+
+    def test_attendance_sessions_deduplicate_manual_close_and_permissions(self):
+        from app.cards.router import CardScan
+        with SessionLocal.begin() as db:
+            db.add(CardScan(reader_id="test-reader", received_at=0, payload=""))
+        headers = {"X-Reader-Id": "test-reader", "X-Reader-Key": KEY}
+        report = {
+            "uid": "01:02:03:04", "card_type": "MIFARE 1KB", "read_status": "ok",
+            "block": 4, "data_hex": (b"2451010001" + bytes(6)).hex().upper(), "detail": "Test",
+        }
+        with patch.dict(os.environ, {"CARD_READER_ID": "test-reader", "CARD_READER_KEY": KEY}):
+            def scan(payload=report):
+                response = self.client.post("/iot/card-reader/scans", headers=headers, json=payload)
+                self.assertEqual(response.status_code, 200, response.text)
+                return response.json()["attendance"]
+
+            self.assertEqual(scan()["message"], "Đã quá giờ điểm danh")
+            self.assertEqual(self.client.post("/card-attendance/sessions", json={"campus_id": 999}).status_code, 404)
+            for duration in (0, -1, 1441, 1.5, True):
+                self.assertEqual(self.client.post("/card-attendance/sessions", json={
+                    "campus_id": 1, "duration_minutes": duration,
+                }).status_code, 422)
+            self.login(2)
+            self.assertEqual(self.client.get("/card-attendance").status_code, 403)
+            self.assertEqual(self.client.post("/card-attendance/sessions", json={"campus_id": 1}).status_code, 403)
+            self.login(1)
+            opened = self.client.post("/card-attendance/sessions", json={"campus_id": 1})
+            self.assertEqual(opened.status_code, 200, opened.text)
+            session_id = opened.json()["id"]
+            self.assertIsNone(opened.json()["ends_at"])
+            self.assertEqual(self.client.post("/card-attendance/sessions", json={"campus_id": 1}).status_code, 409)
+            self.assertEqual(scan()["status"], "recorded")
+            self.assertEqual(scan()["status"], "duplicate")
+            self.assertEqual(scan({**report, "uid": "11:22:33:44"})["message"], "Đã điểm danh")
+            self.assertEqual(scan({**report, "data_hex": "00" * 16})["status"], "invalid")
+            self.assertEqual(scan({**report, "read_status": "read_error", "data_hex": None})["status"], "invalid")
+            entries = self.client.get(f"/card-attendance/sessions/{session_id}/logs").json()
+            self.assertEqual(entries["total"], 1)
+            self.assertEqual(entries["items"][0]["mssv"], "2451010001")
+            self.assertEqual(self.client.get("/card-reader/latest").json()["scan"]["attendance"]["status"], "invalid")
+            self.login(2)
+            self.assertEqual(self.client.get(f"/card-attendance/sessions/{session_id}/logs").status_code, 403)
+            self.assertEqual(self.client.post(f"/card-attendance/sessions/{session_id}/close").status_code, 403)
+            self.client.cookies.clear()
+            self.assertEqual(self.client.get("/card-attendance").status_code, 401)
+            # Device-key requests do not need browser authentication.
+            self.assertEqual(scan()["status"], "duplicate")
+            self.login(1)
+            self.assertFalse(self.client.post(f"/card-attendance/sessions/{session_id}/close").json()["is_open"])
+            self.assertEqual(scan()["message"], "Đã quá giờ điểm danh")
+            self.assertEqual(self.client.get(f"/card-attendance/sessions/{session_id}/logs").json()["total"], 1)
+            next_session = self.client.post("/card-attendance/sessions", json={"campus_id": 1}).json()["id"]
+            self.assertNotEqual(next_session, session_id)
+            self.assertEqual(scan()["status"], "recorded")
+            self.assertEqual(self.client.post(f"/card-attendance/sessions/{session_id}/close").status_code, 409)
+            with SessionLocal() as db:
+                self.assertEqual(db.query(AttendanceLog).count(), 2)
+                self.assertEqual(db.get(AttendanceSession, session_id).admin_id, 1)
+                self.assertEqual(db.get(AttendanceSession, session_id).closed_by, 1)
+
+    def test_attendance_campus_switch_preserves_reader_owner_and_history(self):
+        from app.cards.router import CardScan
+        with SessionLocal.begin() as db:
+            db.add(Campus(id=2, name="Cơ sở thứ hai", address="Test"))
+            db.add(CardScan(reader_id="test-reader", received_at=0, payload=""))
+        headers = {"X-Reader-Id": "test-reader", "X-Reader-Key": KEY}
+        report = {
+            "uid": "01:02:03:04", "card_type": "MIFARE 1KB", "read_status": "ok",
+            "block": 4, "data_hex": (b"2451010001" + bytes(6)).hex().upper(), "detail": "Test",
+        }
+        with patch.dict(os.environ, {"CARD_READER_ID": "test-reader", "CARD_READER_KEY": KEY}):
+            first = self.client.post("/card-attendance/sessions", json={"campus_id": 1}).json()["id"]
+            other = self.client.get("/card-attendance?campus_id=2").json()
+            self.assertIsNone(other["current"])
+            self.assertEqual(other["sessions"], [])
+            self.assertEqual(other["reader_session"]["id"], first)
+            conflict = self.client.post("/card-attendance/sessions", json={"campus_id": 2})
+            self.assertEqual(conflict.status_code, 409)
+            self.assertIn("test-reader", conflict.json()["detail"])
+            self.assertIn("Cơ sở kiểm thử", conflict.json()["detail"])
+            self.assertEqual(self.client.post("/iot/card-reader/scans", headers=headers, json=report).json()["attendance"]["session_id"], first)
+            self.assertEqual(self.client.get(f"/card-attendance/sessions/{first}/logs").json()["total"], 1)
+            self.client.post(f"/card-attendance/sessions/{first}/close")
+            other = self.client.get("/card-attendance?campus_id=2").json()
+            self.assertIsNone(other["reader_session"])
+            second = self.client.post("/card-attendance/sessions", json={"campus_id": 2, "duration_minutes": 1}).json()["id"]
+            self.assertEqual(self.client.post("/iot/card-reader/scans", headers=headers, json=report).json()["attendance"]["status"], "recorded")
+            old = self.client.get("/card-attendance?campus_id=1").json()
+            self.assertEqual(old["current"]["id"], first)
+            self.assertFalse(old["current"]["is_open"])
+            self.assertEqual([item["id"] for item in old["sessions"]], [first])
+            self.assertEqual(old["reader_session"]["id"], second)
+            active = self.client.get("/card-attendance?campus_id=2").json()
+            self.assertEqual(active["current"]["id"], second)
+            self.assertTrue(active["current"]["is_open"])
+            self.assertEqual([item["id"] for item in active["sessions"]], [second])
+            self.assertEqual(self.client.post(f"/card-attendance/sessions/{first}/close").status_code, 409)
+            with SessionLocal.begin() as db:
+                db.get(AttendanceSession, second).ends_at = time.time() - 1
+            available = self.client.get("/card-attendance?campus_id=1").json()
+            self.assertIsNone(available["reader_session"])
+            self.assertEqual(self.client.post("/card-attendance/sessions", json={"campus_id": 1}).status_code, 200)
+            self.assertEqual(self.client.get("/card-attendance?campus_id=999").status_code, 404)
+            self.assertEqual(self.client.get("/card-attendance?campus_id=0").status_code, 422)
+
+    def test_attendance_server_deadline_persistence_and_pagination(self):
+        from app.cards.router import CardScan
+        with SessionLocal.begin() as db:
+            db.add(CardScan(reader_id="test-reader", received_at=0, payload=""))
+        headers = {"X-Reader-Id": "test-reader", "X-Reader-Key": KEY}
+        report = {
+            "uid": "01:02:03:04", "card_type": "MIFARE 1KB", "read_status": "ok",
+            "block": 4, "data_hex": (b"2451012012" + bytes(6)).hex().upper(), "detail": "Test",
+        }
+        with patch.dict(os.environ, {"CARD_READER_ID": "test-reader", "CARD_READER_KEY": KEY}):
+            now = time.time()
+            with patch("app.cards.attendance.time.time", return_value=now):
+                opened = self.client.post("/card-attendance/sessions", json={"campus_id": 1, "duration_minutes": 1}).json()
+            session_id = opened["id"]
+            self.assertEqual(opened["ends_at"], now + 60)
+            with patch("app.cards.attendance.time.time", return_value=now + 59.99):
+                first = self.client.post("/iot/card-reader/scans", headers=headers, json=report)
+                self.assertEqual(first.json()["attendance"]["status"], "recorded")
+            # At the exact deadline no scheduler, open browser, or board clock is needed.
+            with patch("app.cards.attendance.time.time", return_value=now + 60):
+                outside = self.client.post("/iot/card-reader/scans", headers=headers, json=report)
+                self.assertEqual(outside.json()["attendance"]["message"], "Đã quá giờ điểm danh")
+                self.assertFalse(self.client.get("/card-attendance").json()["current"]["is_open"])
+            with SessionLocal.begin() as db:
+                self.assertEqual(db.get(AttendanceSession, session_id).closed_at, now + 60)
+                self.assertEqual(db.query(AttendanceLog).count(), 1)
+                for i in range(51):
+                    db.add(AttendanceLog(session_id=session_id, reader_id="test-reader",
+                                         mssv=f"245101{i:04d}", received_at=now + i))
+            self.assertEqual(len(self.client.get(f"/card-attendance/sessions/{session_id}/logs").json()["items"]), 50)
+            second = self.client.get(f"/card-attendance/sessions/{session_id}/logs?offset=50").json()
+            self.assertEqual(second["total"], 52)
+            self.assertEqual(len(second["items"]), 2)
+            self.assertEqual(self.client.get(f"/card-attendance/sessions/{session_id}/logs?offset=-1").status_code, 422)
+            self.assertEqual(self.client.get("/card-attendance/sessions/missing/logs").status_code, 404)
 
     def test_provision_preserves_existing_credentials_session_and_history(self):
         from app.lighting.provision import main as provision

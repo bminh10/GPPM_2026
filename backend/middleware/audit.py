@@ -13,6 +13,10 @@ _IGNORED_POST_PATHS = {
     "/iot/device/connect",
     "/iot/device/sync",
     "/iot/card-reader/scans",
+    "/iot/card-writer/poll",
+    "/iot/card-writer/present",
+    "/iot/card-writer/claim",
+    "/iot/card-writer/result",
 }
 
 

@@ -1,16 +1,18 @@
-param([switch]$SkipWifi)
+param([switch]$SkipWifi, [ValidateSet("reader", "writer")][string]$Role = "reader")
 $ErrorActionPreference = "Stop"
 $backend = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "backend"
 $envPath = Join-Path $backend ".env"
 if (-not (Test-Path -LiteralPath $envPath)) { throw "Configure backend\.env first." }
-$headerPath = Join-Path $PSScriptRoot "DeviceLocal.h"
+$stationFolder = Join-Path (Split-Path $PSScriptRoot -Parent) "card-$Role"
+$prefix = "CARD_" + $Role.ToUpperInvariant()
+$headerPath = Join-Path $stationFolder "DeviceLocal.h"
 if (Test-Path -LiteralPath $headerPath) {
     throw "DeviceLocal.h already exists. Edit its network fields locally; setup will not overwrite it."
 }
 $content = Get-Content -LiteralPath $envPath -Raw -Encoding UTF8
-$match = [regex]::Match($content, '(?m)^CARD_READER_KEY=([A-Za-z0-9+/=]{32,256})\r?$')
-if ($content -match '(?m)^CARD_READER_KEY=[^\r\n]+\r?$' -and -not $match.Success) {
-    throw "Existing CARD_READER_KEY format is unsupported; refusing to replace it."
+$match = [regex]::Match($content, "(?m)^${prefix}_KEY=([A-Za-z0-9+/=]{32,256})\r?$")
+if ($content -match "(?m)^${prefix}_KEY=[^\r\n]+\r?$" -and -not $match.Success) {
+    throw "Existing ${prefix}_KEY format is unsupported; refusing to replace it."
 }
 $key = $match.Groups[1].Value
 if (-not $match.Success) {
@@ -18,18 +20,18 @@ if (-not $match.Success) {
     $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
     try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
     $key = [Convert]::ToBase64String($bytes)
-    if ($content -match '(?m)^CARD_READER_KEY=\r?$') {
-        $content = [regex]::Replace($content, '(?m)^CARD_READER_KEY=\r?$', "CARD_READER_KEY=$key")
+    if ($content -match "(?m)^${prefix}_KEY=\r?$") {
+        $content = [regex]::Replace($content, "(?m)^${prefix}_KEY=\r?$", "${prefix}_KEY=$key")
         [IO.File]::WriteAllText($envPath, $content, (New-Object Text.UTF8Encoding($false)))
     } else {
-        [IO.File]::AppendAllText($envPath, "`nCARD_READER_KEY=$key`n", (New-Object Text.UTF8Encoding($false)))
+        [IO.File]::AppendAllText($envPath, "`n${prefix}_KEY=$key`n", (New-Object Text.UTF8Encoding($false)))
     }
 }
-$idMatch = [regex]::Match($content, '(?m)^CARD_READER_ID=([A-Za-z0-9_-]{1,80})\r?$')
-if ($content -match '(?m)^CARD_READER_ID=' -and -not $idMatch.Success) {
-    throw "Unsupported CARD_READER_ID format."
+$idMatch = [regex]::Match($content, "(?m)^${prefix}_ID=([A-Za-z0-9_-]{1,80})\r?$")
+if ($content -match "(?m)^${prefix}_ID=" -and -not $idMatch.Success) {
+    throw "Unsupported ${prefix}_ID format."
 }
-$readerId = "card-reader-01"
+$readerId = "card-$Role-01"
 if ($idMatch.Success) { $readerId = $idMatch.Groups[1].Value }
 $ssid = ""
 $password = ""
@@ -60,7 +62,9 @@ $header = @"
 [IO.File]::WriteAllText($headerPath, $header, (New-Object Text.UTF8Encoding($false)))
 Push-Location $backend
 try {
-    & python -m app.cards.router
-    if ($LASTEXITCODE -ne 0) { throw "Station initialization failed. Fix backend configuration and run python -m app.cards.router from backend." }
+    $module = "app.cards.router"
+    if ($Role -eq "writer") { $module = "app.cards.writer" }
+    & python -m $module
+    if ($LASTEXITCODE -ne 0) { throw "Station initialization failed. Fix backend configuration and run python -m $module from backend." }
 } finally { Pop-Location }
-Write-Output "Private reader configuration saved. Restart backend, configure LAN/Wi-Fi if skipped, then build/upload."
+Write-Output "Private $Role configuration saved. Restart backend, configure LAN/Wi-Fi if skipped, then build/upload."

@@ -40,7 +40,9 @@ String hexBytes(const byte* bytes, size_t count, bool separators) {
   return text;
 }
 
-bool sendReport(const JsonDocument& report) {
+bool sendReport(const JsonDocument& report, String& mssv, String& attendanceStatus) {
+  mssv = "";
+  attendanceStatus = "";
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("ERROR: Wi-Fi disconnected. Scan was NOT delivered; reconnect and scan again.");
     return false;
@@ -88,6 +90,19 @@ bool sendReport(const JsonDocument& report) {
     ack["received"].as<bool>() && ack["read_status"].as<String>() == report["read_status"].as<String>();
   if (!delivered) {
     Serial.printf("ERROR: API delivery failed (HTTP %d). Check backend/key/network and scan again.\n", status);
+  } else {
+    attendanceStatus = ack["attendance"]["status"].as<String>();
+    if (attendanceStatus != "recorded" && attendanceStatus != "duplicate" &&
+        attendanceStatus != "outside" && attendanceStatus != "invalid") {
+      Serial.println("ERROR: API did not confirm attendance outcome. Update backend; attendance NOT confirmed.");
+      return false;
+    }
+    if (!ack["attendance"]["message"].is<const char*>()) {
+      Serial.println("ERROR: Attendance response missing message; attendance NOT confirmed.");
+      return false;
+    }
+    if (ack["mssv"].is<const char*>()) mssv = ack["mssv"].as<String>();
+    Serial.printf("Attendance: %s\n", ack["attendance"]["message"].as<const char*>());
   }
   return delivered;
 }
@@ -126,7 +141,7 @@ void loop() {
   if (!reader.PICC_IsNewCardPresent()) { delay(5); return; }
   if (!reader.PICC_ReadCardSerial()) {
     Serial.println("ERROR: Card detected but UID read failed.");
-    beep(3, 100);
+    beep(2, 100);
     return;
   }
   scanned = true;
@@ -158,10 +173,40 @@ void loop() {
   }
   reader.PICC_HaltA();
   reader.PCD_StopCrypto1();
+  Serial.println("\n========== CARD SCANNED ==========");
+  Serial.printf("UID: %s\n", report["uid"].as<const char*>());
+  Serial.printf("Card type: %s\n", report["card_type"].as<const char*>());
+  Serial.printf("Read status: %s\n", report["read_status"].as<const char*>());
+  Serial.printf("Block: %u\n", static_cast<unsigned int>(DATA_BLOCK));
+  if (report["data_hex"].is<const char*>()) {
+    const char* hex = report["data_hex"].as<const char*>();
+    Serial.printf("Data HEX: %s\n", hex);
+    Serial.print("Data ASCII (not verified student ID): ");
+    for (size_t i = 0; i < 32; i += 2) {
+      char pair[] = {hex[i], hex[i + 1], '\0'};
+      const unsigned long value = strtoul(pair, nullptr, 16);
+      Serial.write(value >= 32 && value <= 126 ? static_cast<uint8_t>(value) : '.');
+    }
+    Serial.println();
+  } else {
+    Serial.println("Data: unavailable; UID was read, memory was not.");
+  }
+  Serial.printf("Detail: %s\n", report["detail"].as<const char*>());
+  Serial.println("Student verification: NOT performed. Card was NOT modified.");
+  Serial.print("JSON: ");
   serializeJson(report, Serial);
   Serial.println();
-  const bool delivered = sendReport(report);
-  if (!delivered) beep(2, 400);
-  else if (report["read_status"].as<String>() == "ok") beep(1, 100);
-  else beep(3, 100);
+  String mssv;
+  String attendanceStatus;
+  const bool delivered = sendReport(report, mssv, attendanceStatus);
+  Serial.println(delivered ? "API: received scan." : "API: scan NOT confirmed.");
+  Serial.println("==================================");
+  if (!delivered) beep(3, 100);
+  else if (attendanceStatus != "recorded") {
+    Serial.printf("Buzzer: 2 beeps; attendance not added (%s).\n", attendanceStatus.c_str());
+    beep(2, 100);
+  } else {
+    Serial.printf("MSSV: %s. Buzzer: 1 beep; attendance recorded, student identity NOT verified.\n", mssv.c_str());
+    beep(1, 100);
+  }
 }

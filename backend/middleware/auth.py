@@ -15,6 +15,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         device_endpoint = request.method == "POST" and request.url.path in {
             "/iot/device/connect", "/iot/device/sync",
             "/iot/card-reader/scans",
+            "/iot/card-writer/poll", "/iot/card-writer/present",
+            "/iot/card-writer/claim", "/iot/card-writer/result",
         }
         if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS or device_endpoint:
             return await call_next(request)

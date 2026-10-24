@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Alert, Card, Descriptions, Flex, Tag, Typography } from 'antd'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
+import AttendancePanel from './AttendancePanel'
 
 type Scan = {
   uid: string
@@ -9,9 +10,15 @@ type Scan = {
   block: number
   data_hex: string | null
   data_text: string
+  mssv: string | null
   detail: string
   received_at: number
   student_verified: false
+  attendance: {
+    status: 'recorded' | 'duplicate' | 'outside' | 'invalid'
+    message: string
+    campus_name: string | null
+  } | null
 }
 type ReaderResponse = { reader_id: string; scan: Scan | null }
 
@@ -44,14 +51,38 @@ export default function CardReaderPage() {
   return (
     <Flex vertical gap={16}>
       <Typography.Title level={3}>Đọc thẻ</Typography.Title>
-      <Alert showIcon type="info" title="Chẩn đoán dữ liệu thẻ · Chưa xác minh sinh viên, chưa điểm danh"
-        description="Chỉ hiển thị dữ liệu thực tế thiết bị gửi về. Không ghi hoặc thay đổi thẻ. Dấu chấm trong bản xem ASCII đại diện byte không in được." />
+      <Alert showIcon type="info" title="Đọc MSSV và điểm danh theo phiên · Chưa xác minh danh tính sinh viên"
+        description="Chỉ thêm log điểm danh khi có phiên đang mở tại cơ sở. Không ghi hoặc thay đổi thẻ. Dấu chấm trong bản xem ASCII đại diện byte không in được." />
+      <AttendancePanel />
       {error && <Alert showIcon type="error" title="Không tải được dữ liệu đầu đọc" description={error} />}
       <Card title={data ? `Trạm ${data.reader_id}` : 'Đang kết nối API'}>
         {!scan ? (
           <Typography.Paragraph>Chưa nhận được lần quét nào. Vui lòng mở đầu đọc và chạm thẻ.</Typography.Paragraph>
         ) : (
           <Flex vertical gap={12}>
+            {scan.attendance && <Alert showIcon
+              type={error ? 'warning' : scan.attendance.status === 'recorded' ? 'success' : 'warning'}
+              title={`${error ? 'Kết quả lần quét cũ · ' : ''}${scan.attendance.message}`}
+              description={scan.attendance.campus_name
+                ? `Cơ sở: ${scan.attendance.campus_name}. Kết quả của lần quét gần nhất, không phải trạng thái phiên hiện tại.`
+                : 'Chưa có phiên điểm danh. Đây là kết quả của lần quét gần nhất.'} />}
+            <Card size="small" title="Mã số sinh viên trên thẻ">
+              {scan.mssv ? (
+                <Typography.Title level={2} style={{ margin: 0 }}>
+                  <Typography.Text copyable>{scan.mssv}</Typography.Text>
+                </Typography.Title>
+              ) : (
+                <Typography.Text type="warning">
+                  {scan.read_status === 'ok'
+                    ? 'Không tìm thấy MSSV đúng định dạng trong khối 4.'
+                    : 'Chưa đọc được MSSV: không đọc được dữ liệu khối thẻ.'}
+                </Typography.Text>
+              )}
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                {error ? 'Dữ liệu lần quét cũ · Mất kết nối API. ' : ''}
+                MSSV đọc từ thẻ, chưa đối chiếu danh sách sinh viên. Xem kết quả điểm danh của lần quét ở thông báo bên trên.
+              </Typography.Paragraph>
+            </Card>
             <Tag color={error ? 'default' : scan.read_status === 'ok' ? 'green' : 'orange'}>
               {error ? 'Dữ liệu cũ · Mất kết nối API' : scan.read_status === 'ok'
                 ? 'Đã đọc khối dữ liệu và nhận tại API'
