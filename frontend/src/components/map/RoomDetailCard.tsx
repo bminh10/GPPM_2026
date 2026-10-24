@@ -9,8 +9,11 @@ export type ActiveRoomClass = {
   room_id: number
   room_name: string
   campus_id: number
+  room_building: string | null
+  room_capacity: number
   class_name: string
   subject_name: string
+  registered_students: number
   teacher_name: string | null
   start_time: string
   end_time: string
@@ -21,6 +24,7 @@ type Props = {
   buildingName: string
   currentClasses: ActiveRoomClass[]
   scheduleLoading: boolean
+  scheduleError: string | null
   onClose: () => void
   isLightOn: (lightId: string) => boolean
   onToggleLight: (lightId: string) => void
@@ -30,11 +34,18 @@ type Props = {
 }
 
 export default function RoomDetailCard({
-  room, buildingName, currentClasses, scheduleLoading, onClose, isLightOn, onToggleLight, getLightStatus, isSending, canControl,
+  room, buildingName, currentClasses, scheduleLoading, scheduleError, onClose, isLightOn, onToggleLight, getLightStatus, isSending, canControl,
 }: Props) {
   const state = getRoomState(room)
-  const meta = ROOM_STATE_META[state]
-  const rate = Math.round((room.occupancy / room.capacity) * 100)
+  const activeClass = currentClasses[0]
+  const meta = activeClass
+    ? { label: 'Có lịch trong ngày', color: '#1677ff' }
+    : ROOM_STATE_META[state]
+  const roomCapacity = activeClass?.room_capacity ?? room.capacity
+  const occupancy = activeClass?.registered_students ?? room.occupancy
+  const rate = roomCapacity > 0
+    ? Math.min(100, Math.round((occupancy / roomCapacity) * 100))
+    : 0
 
   return (
     <Card
@@ -49,12 +60,14 @@ export default function RoomDetailCard({
       extra={<Button type="text" size="small" icon={<CloseOutlined />} onClick={onClose} />}
     >
       <Typography.Paragraph style={{ marginBottom: 8 }}>{room.name}</Typography.Paragraph>
-      {scheduleLoading && currentClasses.length === 0 ? (
-        <Typography.Text type="secondary">Đang kiểm tra lịch học hiện tại…</Typography.Text>
+      {scheduleError ? (
+        <Typography.Text type="danger">Không tải được lịch của phòng: {scheduleError}</Typography.Text>
+      ) : scheduleLoading && currentClasses.length === 0 ? (
+        <Typography.Text type="secondary">Đang tải lịch học trong ngày đã chọn…</Typography.Text>
       ) : currentClasses.length > 0 ? (
         <Card size="small" style={{ marginBottom: 12, borderColor: '#1677ff' }}>
           <Flex vertical gap={4}>
-            <Tag color="#1677ff" style={{ width: 'fit-content', marginInlineEnd: 0 }}>Đang có lớp</Tag>
+            <Tag color="#1677ff" style={{ width: 'fit-content', marginInlineEnd: 0 }}>Có lịch trong ngày</Tag>
             {currentClasses.map((currentClass) => (
               <Flex key={`${currentClass.room_id}-${currentClass.start_time}-${currentClass.class_name}`} vertical>
                 <Typography.Text strong>{currentClass.class_name} · {currentClass.subject_name}</Typography.Text>
@@ -62,13 +75,16 @@ export default function RoomDetailCard({
                   {currentClass.start_time.slice(0, 5)}–{currentClass.end_time.slice(0, 5)}
                   {currentClass.teacher_name ? ` · ${currentClass.teacher_name}` : ''}
                 </Typography.Text>
+                <Typography.Text type="secondary">
+                  Sinh viên đăng ký: {currentClass.registered_students} · Sức chứa phòng: {currentClass.room_capacity}
+                </Typography.Text>
               </Flex>
             ))}
           </Flex>
         </Card>
       ) : (
         <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-          {scheduleLoading ? 'Đang kiểm tra lịch học hiện tại…' : 'Hiện không có lớp đang học.'}
+          {scheduleLoading ? 'Đang tải lịch học trong ngày đã chọn…' : 'Phòng không có lớp học trong ngày đã chọn.'}
         </Typography.Paragraph>
       )}
       {room.lights.length === 0 && (
@@ -122,9 +138,9 @@ export default function RoomDetailCard({
         size="small"
         column={1}
         items={[
-          { key: 'building', label: 'Tòa', children: buildingName },
+          { key: 'building', label: 'Tòa', children: activeClass?.room_building || buildingName },
           { key: 'floor', label: 'Tầng', children: `Tầng ${room.floor}` },
-          { key: 'capacity', label: 'Sức chứa', children: `${room.occupancy}/${room.capacity} chỗ` },
+          { key: 'capacity', label: 'Số sinh viên / sức chứa', children: `${occupancy}/${roomCapacity} chỗ` },
           {
             key: 'equipment',
             label: 'Thiết bị',
