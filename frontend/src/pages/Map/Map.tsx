@@ -65,7 +65,33 @@ type ViewProps = {
 function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }: ViewProps) {
   const campus = dataset.campuses.find((c) => c.id === campusId)!
   const buildings = useMemo(() => dataset.buildings.filter((b) => b.campusId === campusId), [dataset, campusId])
-  const rooms = useMemo(() => dataset.rooms.filter((r) => r.campusId === campusId), [dataset, campusId])
+  const rooms = useMemo(() => {
+    const campusRooms = dataset.rooms.filter((room) => room.campusId === campusId)
+    const reportedLights = Object.values(lighting.lights).filter((light) => light.campus_id === campusId)
+
+    return campusRooms.map((room) => {
+      const roomLights = reportedLights
+        .filter((light) => light.room_id === room.id)
+        .map((light, index, matches) => {
+          const longitudes = room.polygon.map(([longitude]) => longitude)
+          const longitude = Math.min(...longitudes) +
+            ((index + 1) / (matches.length + 1)) * (Math.max(...longitudes) - Math.min(...longitudes))
+          return {
+            id: light.light_id,
+            name: light.light_id,
+            position: [longitude, room.center[1]] as [number, number],
+          }
+        })
+      const configuredIds = new Set(room.lights.map((light) => light.id))
+      return {
+        ...room,
+        lights: [
+          ...room.lights,
+          ...roomLights.filter((light) => !configuredIds.has(light.id)),
+        ],
+      }
+    })
+  }, [dataset, campusId, lighting.lights])
 
   // Mặc định chưa chọn tòa nào: hiển thị toàn khuôn viên
   const [buildingId, setBuildingId] = useState<string | null>(null)
@@ -90,12 +116,22 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
     (id: string) => {
       const room = rooms.find((r) => r.id === id)
       if (!room) return
+      const roomBuilding = buildings.find((item) => item.id === room.buildingId)
       setBuildingId(room.buildingId)
       setFloor(room.floor)
       setRoomId(room.id)
-      setFocus({ center: room.center, key: Date.now() })
+      setFocus({
+        center: room.center,
+        key: Date.now(),
+        zoom: 20.7,
+        elevation: roomBuilding
+          ? (room.floor - 1) * roomBuilding.floorHeight * 2.5 +
+            0.4 * 2.5 +
+            (roomBuilding.floorHeight * 0.7 + 1.5) * 2.5 / 2
+          : undefined,
+      })
     },
-    [rooms],
+    [buildings, rooms],
   )
 
   const selectBuilding = useCallback(
@@ -121,7 +157,11 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
     if (!building) return
     setFloor(f)
     if (selectedRoom && selectedRoom.floor !== f) setRoomId(null)
-    setFocus({ center: building.center, key: Date.now() })
+    setFocus({
+      center: building.center,
+      key: Date.now(),
+      elevation: (f - 1 + 0.5) * building.floorHeight * 2.5,
+    })
   }
 
   return (

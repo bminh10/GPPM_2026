@@ -18,6 +18,7 @@ import {
 
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
 const PLATE_THICKNESS = 0.4
+const VERTICAL_EXAGGERATION = 2.5
 const iconNode = EnvironmentOutlined.icon
 const environmentIconNode =
   typeof iconNode === 'function' ? iconNode('#000000', '#000000') : iconNode
@@ -61,7 +62,7 @@ const bulbIcon = {
   mask: true,
 }
 
-export type MapFocus = { center: LngLat; key: number; zoom?: number }
+export type MapFocus = { center: LngLat; key: number; zoom?: number; elevation?: number }
 
 type CampusMapProps = {
   campus: Campus
@@ -122,17 +123,59 @@ export default function CampusMap({
     return () => window.cancelAnimationFrame(frame)
   }, [])
 
+
   useEffect(() => {
-    if (!focus) return
-    mapRef.current?.flyTo({
+    if (!focus || !mapRef.current) return
+
+    const map = mapRef.current
+    const zoom = focus.zoom ?? 19.3
+
+    // Tim toa nha dang duoc chon
+    const building = BUILDINGS.find(
+      (item) => item.id === selectedBuildingId,
+    )
+
+    // Neu da chon toa nha, luon tinh do cao theo tang hien tai.
+    // Khong su dung focus.elevation = 0 de ghi de do cao tang.
+    let targetElevation = focus.elevation ?? 0
+
+    if (building) {
+      const floorIndex = Math.max(0, selectedFloor - 1)
+
+      const floorBase =
+        floorIndex *
+        building.floorHeight *
+        VERTICAL_EXAGGERATION +
+        PLATE_THICKNESS * VERTICAL_EXAGGERATION
+
+      // Dua camera vao gan giua chieu cao khoi phong
+      const roomHeight =
+        building.floorHeight *
+        0.7 *
+        VERTICAL_EXAGGERATION
+
+      targetElevation = floorBase + roomHeight / 2
+    }
+
+    map.setCenterClampedToGround(false)
+
+    // Di chuyen camera trong mot animation duy nhat.
+    // Khong goi setCenterElevation sau moveend.
+    map.easeTo({
       center: focus.center,
-      zoom: focus.zoom ?? 19.3,
+      zoom,
+      elevation: targetElevation,
       pitch: 58,
       bearing: -25,
       duration: 1400,
       essential: true,
     })
-  }, [focus])
+  }, [
+    focus,
+    BUILDINGS,
+    selectedBuildingId,
+    selectedFloor,
+  ])
 
   const layers = useMemo(() => {
     const primary = colors.primary.DEFAULT
@@ -142,7 +185,7 @@ export default function CampusMap({
     const shells = BUILDINGS.filter((b) => b.id !== selectedBuildingId).map((b) => ({
       building: b,
       polygon: withZ(b.polygon, 0),
-      height: b.floors * b.floorHeight,
+      height: b.floors * b.floorHeight * VERTICAL_EXAGGERATION,
     }))
 
     // Tòa đang chọn: các tầng dưới tầng chọn (mờ) + sàn tầng chọn; tầng trên bị ẩn (cắt lớp)
@@ -153,22 +196,27 @@ export default function CampusMap({
     if (selectedBuilding) {
       const ring = selectedBuilding.polygon
       for (let f = 1; f <= selectedFloor; f++) {
-        const base = (f - 1) * selectedBuilding.floorHeight
+        const base = (f - 1) * selectedBuilding.floorHeight * VERTICAL_EXAGGERATION
         const current = f === selectedFloor
         slabs.push({
           id: `${selectedBuilding.id}-${f}`,
           polygon: withZ(ring, base),
-          elevation: current ? PLATE_THICKNESS : selectedBuilding.floorHeight * 0.92,
+          elevation: current
+            ? PLATE_THICKNESS * VERTICAL_EXAGGERATION
+            : selectedBuilding.floorHeight * 0.92 * VERTICAL_EXAGGERATION,
           current,
         })
       }
 
-      floorBase = (selectedFloor - 1) * selectedBuilding.floorHeight + PLATE_THICKNESS
+      floorBase =
+        (selectedFloor - 1) * selectedBuilding.floorHeight * VERTICAL_EXAGGERATION +
+        PLATE_THICKNESS * VERTICAL_EXAGGERATION
       visibleRooms = ROOMS.filter(
         (r) => r.buildingId === selectedBuildingId && r.floor === selectedFloor,
       )
       const fh = selectedBuilding.floorHeight
-      roomElevation = (r: Room) => fh * 0.7 + (r.id === selectedRoomId ? 1.5 : 0)
+      roomElevation = (r: Room) =>
+        (fh * 0.7 + (r.id === selectedRoomId ? 1.5 : 0)) * VERTICAL_EXAGGERATION
     }
 
     const boundary = campus.boundary
@@ -184,9 +232,11 @@ export default function CampusMap({
     const walls = openRoom ? openRoom.polygon.map((point, index, ring) => {
       const next = ring[(index + 1) % ring.length]
       const top = floorBase + roomElevation(openRoom)
-      return { polygon: [
-        [...point, floorBase], [...next, floorBase], [...next, top], [...point, top],
-      ] as [number, number, number][] }
+      return {
+        polygon: [
+          [...point, floorBase], [...next, floorBase], [...next, top], [...point, top],
+        ] as [number, number, number][]
+      }
     }) : []
     const boundaryClosed = [...boundary, boundary[0]]
     const nameAnchor: [number, number, number] = [
@@ -370,7 +420,7 @@ export default function CampusMap({
         fontFamily: FONT_FAMILY,
         fontWeight: 700,
         getPosition: (b) =>
-          [...b.center, b.floors * b.floorHeight + 4 + hotspotOffset] as [number, number, number],
+          [...b.center, b.floors * b.floorHeight * VERTICAL_EXAGGERATION + 4 + hotspotOffset] as [number, number, number],
         getText: (b) => b.name,
         getSize: 16,
         getColor: hexToRgba('#ffffff'),
@@ -387,7 +437,7 @@ export default function CampusMap({
         data: BUILDINGS,
         getIcon: () => environmentIcon,
         getPosition: (b) =>
-          [...b.center, b.floors * b.floorHeight + 4 + hotspotOffset] as [number, number, number],
+          [...b.center, b.floors * b.floorHeight * VERTICAL_EXAGGERATION + 4 + hotspotOffset] as [number, number, number],
         getSize: 24,
         sizeUnits: 'pixels',
         getColor: hexToRgba(colors.primary.dark),
@@ -424,7 +474,7 @@ export default function CampusMap({
         bearing: -25,
       }}
       maxPitch={75}
-      maxZoom={21}
+      maxZoom={22}
       mapStyle={MAP_STYLE}
       style={{ width: '100%', height: '100%' }}
     >
