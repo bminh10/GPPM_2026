@@ -804,9 +804,9 @@ export default function TimetablePage() {
               }}
               style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}
               options={[
-                { value: 'all', label: 'Toàn bộ đăng ký trong kỳ' },
+                // { value: 'all', label: 'Toàn bộ đăng ký trong kỳ' },
                 { value: 'faculty', label: 'Theo khoa' },
-                { value: 'registrations', label: 'Chọn lớp / môn' },
+                // { value: 'registrations', label: 'Chọn lớp / môn' },
               ]}
             />
             {automaticScheduleScope === 'faculty' && (

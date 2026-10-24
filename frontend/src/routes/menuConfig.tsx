@@ -1,10 +1,11 @@
-import { CalendarOutlined, DashboardOutlined, DatabaseOutlined, EnvironmentOutlined, SettingOutlined, TeamOutlined } from '@ant-design/icons'
+import { AppstoreOutlined, CalendarOutlined, DashboardOutlined, DatabaseOutlined, EnvironmentOutlined, SettingOutlined, TeamOutlined } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 
 export const ROUTE_PATHS = {
   dashboard: '/dashboard',
   map: '/map',
   timetable: '/timetable',
+  administration: '/admin',
   dataManagement: '/admin/data',
   userManagement: '/admin/users',
   profile: '/profile',
@@ -32,14 +33,21 @@ export const menuItems: AppMenuItem[] = [
     label: 'Thời khóa biểu',
   },
   {
-    key: ROUTE_PATHS.dataManagement,
-    icon: <DatabaseOutlined />,
-    label: 'Quản lý dữ liệu',
-  },
-  {
-    key: ROUTE_PATHS.userManagement,
-    icon: <TeamOutlined />,
-    label: 'Quản lý tài khoản',
+    key: ROUTE_PATHS.administration,
+    icon: <AppstoreOutlined />,
+    label: 'Quản lý',
+    children: [
+      {
+        key: ROUTE_PATHS.dataManagement,
+        icon: <DatabaseOutlined />,
+        label: 'Quản lý dữ liệu',
+      },
+      {
+        key: ROUTE_PATHS.userManagement,
+        icon: <TeamOutlined />,
+        label: 'Quản lý tài khoản',
+      },
+    ],
   },
   {
     key: ROUTE_PATHS.settings,

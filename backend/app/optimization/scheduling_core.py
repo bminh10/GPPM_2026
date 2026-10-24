@@ -85,7 +85,9 @@ def build_weekly_model(
     }
     by_room_day: dict[tuple[int, int], list[tuple[time, time, cp_model.IntVar]]] = {}
     by_class_day: dict[tuple[int, int], list[tuple[time, time, cp_model.IntVar]]] = {}
-    objective_terms = []
+    room_cost_terms = []
+    max_room_cost_by_requirement: dict[str, int] = {}
+    sunday_assignments = []
     requirement_by_assumption: dict[int, str] = {}
     requirement_types = {
         requirement.id: requirement.is_thuc_hanh for requirement in requirements
@@ -111,9 +113,14 @@ def build_weekly_model(
             by_class_day.setdefault(
                 (candidate.class_id, candidate.day_of_week), []
             ).append((candidate.start_time, candidate.end_time, variable))
-        objective_terms.append(
-            (candidate.room_capacity - candidate.required_capacity) * 100 * variable
+        room_cost = (candidate.room_capacity - candidate.required_capacity) * 100
+        room_cost_terms.append(room_cost * variable)
+        max_room_cost_by_requirement[candidate.requirement_id] = max(
+            max_room_cost_by_requirement.get(candidate.requirement_id, 0),
+            room_cost,
         )
+        if candidate.day_of_week == 8:
+            sunday_assignments.append(variable)
 
         for fixed in fixed_schedules:
             if fixed.day_of_week != candidate.day_of_week:
@@ -155,6 +162,39 @@ def build_weekly_model(
     for grouped_candidates in by_class_day.values():
         _add_non_overlapping_constraints(model, grouped_candidates)
 
+    room_cost_upper_bound = sum(max_room_cost_by_requirement.values())
+    weekday_cost = room_cost_upper_bound + 1
+    weekday_load_upper_bound = len(requirements) ** 2
+    sunday_cost = (
+        weekday_load_upper_bound * weekday_cost + room_cost_upper_bound + 1
+    )
+    objective_terms = [
+        sunday_cost * sum(sunday_assignments),
+        *room_cost_terms,
+    ]
+
+    for day_of_week in range(2, 8):
+        day_assignments = [
+            variable
+            for candidate, variable in candidate_vars.items()
+            if candidate.day_of_week == day_of_week
+        ]
+        if not day_assignments:
+            continue
+        day_load = sum(day_assignments)
+        for threshold in range(
+            1,
+            min(len(day_assignments), len(requirements)) + 1,
+        ):
+            load_reached = model.new_bool_var(
+                f"weekday_{day_of_week}_load_{threshold}"
+            )
+            model.add(day_load >= threshold).only_enforce_if(load_reached)
+            model.add(day_load < threshold).only_enforce_if(load_reached.Not())
+            objective_terms.append(
+                weekday_cost * (2 * threshold - 1) * load_reached
+            )
+
     model.minimize(sum(objective_terms))
     return model, candidate_vars, requirement_by_assumption
 
@@ -167,32 +207,45 @@ def solve_weekly_schedule(
     end_date: date,
     max_time_seconds: int = 30,
 ) -> tuple[int, list[ScheduleCandidate], float, list[str]]:
-    model, candidate_vars, requirement_by_assumption = build_weekly_model(
-        requirements,
-        candidates,
-        fixed_schedules,
-        start_date,
-        end_date,
-    )
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = max_time_seconds
-    solver.parameters.num_search_workers = 8
-    solver.parameters.random_seed = 42
-    solver_status = solver.solve(model)
-    selected = [
-        candidate
-        for candidate, variable in candidate_vars.items()
-        if solver.boolean_value(variable)
-    ] if solver_status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else []
-    infeasible_requirements = []
-    if solver_status == cp_model.INFEASIBLE:
-        for assumption in solver.sufficient_assumptions_for_infeasibility():
-            literal_index = assumption if assumption >= 0 else -assumption - 1
-            requirement_id = requirement_by_assumption.get(literal_index)
-            if requirement_id is not None:
-                infeasible_requirements.append(requirement_id)
-    objective_value = solver.objective_value if solver_status in (
-        cp_model.OPTIMAL,
-        cp_model.FEASIBLE,
-    ) else 0.0
-    return solver_status, selected, objective_value, infeasible_requirements
+    def solve_candidates(
+        available_candidates: list[ScheduleCandidate],
+    ) -> tuple[int, list[ScheduleCandidate], float, list[str]]:
+        model, candidate_vars, requirement_by_assumption = build_weekly_model(
+            requirements,
+            available_candidates,
+            fixed_schedules,
+            start_date,
+            end_date,
+        )
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = max_time_seconds
+        solver.parameters.num_search_workers = 8
+        solver.parameters.random_seed = 42
+        solver_status = solver.solve(model)
+        selected = [
+            candidate
+            for candidate, variable in candidate_vars.items()
+            if solver.boolean_value(variable)
+        ] if solver_status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else []
+        infeasible_requirements = []
+        if solver_status == cp_model.INFEASIBLE:
+            for assumption in solver.sufficient_assumptions_for_infeasibility():
+                literal_index = assumption if assumption >= 0 else -assumption - 1
+                requirement_id = requirement_by_assumption.get(literal_index)
+                if requirement_id is not None:
+                    infeasible_requirements.append(requirement_id)
+        objective_value = solver.objective_value if solver_status in (
+            cp_model.OPTIMAL,
+            cp_model.FEASIBLE,
+        ) else 0.0
+        return solver_status, selected, objective_value, infeasible_requirements
+
+    weekday_candidates = [
+        candidate for candidate in candidates if candidate.day_of_week != 8
+    ]
+    if len(weekday_candidates) != len(candidates):
+        weekday_result = solve_candidates(weekday_candidates)
+        if weekday_result[0] != cp_model.INFEASIBLE:
+            return weekday_result
+
+    return solve_candidates(candidates)

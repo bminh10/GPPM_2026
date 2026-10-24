@@ -1,7 +1,8 @@
 import { Layout, Menu, Flex, Typography } from 'antd'
 import { BankOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { menuItems } from '../../routes/menuConfig'
+import { menuItems, ROUTE_PATHS } from '../../routes/menuConfig'
+import Logo from '../logo/Logo'
 
 type AppSiderProps = {
   collapsed: boolean
@@ -12,6 +13,11 @@ export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
+  let size = 0;
+  if(collapsed){
+    size = 36;
+  }
+
   return (
     <Layout.Sider
       collapsible
@@ -21,11 +27,11 @@ export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
       breakpoint="lg"
       style={{ minHeight: '100vh', position: 'sticky', top: 0, height: '100vh' }}
     >
-      <Flex align="center" justify="center" gap={10} style={{ height: 64 }}>
-        <BankOutlined style={{ fontSize: 24, color: '#fff' }} />
+      <Flex  align="center" justify="center" gap={10} style={{ height: 64, display: 'flex' }}>
+        <Logo size={size} />
         {!collapsed && (
           <Typography.Title level={4} style={{ margin: 0, color: '#fff' }}>
-            CampusOpt
+            SmartOU
           </Typography.Title>
         )}
       </Flex>
@@ -33,6 +39,7 @@ export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
         theme="dark"
         mode="inline"
         selectedKeys={[pathname]}
+        defaultOpenKeys={pathname.startsWith(`${ROUTE_PATHS.administration}/`) ? [ROUTE_PATHS.administration] : []}
         items={menuItems}
         onClick={({ key }) => navigate(key)}
       />

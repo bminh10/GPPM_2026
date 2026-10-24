@@ -230,6 +230,86 @@ class WeeklyScheduleSolverTests(unittest.TestCase):
         self.assertEqual(len(selected), 1)
         self.assertEqual(selected[0].room_id, 1)
 
+    def test_avoids_sunday_when_a_weekday_is_available(self) -> None:
+        requirements = [MeetingRequirement("1:theory", 1, False)]
+        candidates = [
+            self.candidate("1:theory", 1, 1, day_of_week=8),
+            self.candidate("1:theory", 1, 2, day_of_week=5),
+        ]
+
+        solver_status, selected, _, _ = self.solve(requirements, candidates)
+
+        self.assertIn(solver_status, (cp_model.OPTIMAL, cp_model.FEASIBLE))
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0].day_of_week, 5)
+
+    def test_keeps_sunday_available_when_no_weekday_is_feasible(self) -> None:
+        requirements = [MeetingRequirement("1:theory", 1, False)]
+        candidates = [
+            self.candidate("1:theory", 1, 1, day_of_week=8),
+        ]
+
+        solver_status, selected, _, _ = self.solve(requirements, candidates)
+
+        self.assertIn(solver_status, (cp_model.OPTIMAL, cp_model.FEASIBLE))
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0].day_of_week, 8)
+
+    def test_spreads_meetings_across_weekdays_before_using_sunday(self) -> None:
+        requirements = [
+            MeetingRequirement(f"{registration_id}:theory", registration_id, False)
+            for registration_id in range(1, 7)
+        ]
+        candidates = [
+            self.candidate(
+                requirement.id,
+                requirement.registration_id,
+                room_id=1,
+                day_of_week=day_of_week,
+                class_id=requirement.registration_id,
+            )
+            for requirement in requirements
+            for day_of_week in range(2, 9)
+        ]
+
+        solver_status, selected, _, _ = self.solve(requirements, candidates)
+
+        self.assertIn(solver_status, (cp_model.OPTIMAL, cp_model.FEASIBLE))
+        self.assertEqual(len(selected), 6)
+        self.assertEqual(
+            {candidate.day_of_week for candidate in selected},
+            set(range(2, 8)),
+        )
+
+    def test_uses_sunday_only_when_weekdays_cannot_fit_all_meetings(self) -> None:
+        requirements = [
+            MeetingRequirement("1:theory", 1, False),
+            MeetingRequirement("2:theory", 2, False),
+        ]
+        candidates = [
+            self.candidate("1:theory", 1, room_id=1, day_of_week=2),
+            self.candidate("2:theory", 2, room_id=1, day_of_week=2),
+            self.candidate("1:theory", 1, room_id=1, day_of_week=8),
+            self.candidate(
+                "2:theory",
+                2,
+                room_id=1,
+                day_of_week=8,
+                time_slot_id=2,
+                start_time=time(10),
+                end_time=time(12),
+            ),
+        ]
+
+        solver_status, selected, _, _ = self.solve(requirements, candidates)
+
+        self.assertIn(solver_status, (cp_model.OPTIMAL, cp_model.FEASIBLE))
+        self.assertEqual(len(selected), 2)
+        self.assertEqual(
+            sum(candidate.day_of_week == 8 for candidate in selected),
+            1,
+        )
+
     def test_fixed_room_schedule_blocks_recurring_overlap(self) -> None:
         requirements = [MeetingRequirement("1:theory", 1, False)]
         candidates = [self.candidate("1:theory", 1, 5)]

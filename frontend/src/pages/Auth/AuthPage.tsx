@@ -63,7 +63,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
             <Typography.Text type="secondary">
               {isSignIn
                 ? 'Đăng nhập để theo dõi và tối ưu tài nguyên phòng học.'
-                : 'Chỉ mất 1 phút để bắt đầu với CampusOpt.'}
+                : 'Chỉ mất 1 phút để bắt đầu với SmartOU.'}
             </Typography.Text>
           </div>
 
