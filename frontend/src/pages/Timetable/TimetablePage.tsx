@@ -586,7 +586,11 @@ export default function TimetablePage() {
               options={semesters.map((semester) => ({ value: semester.id, label: semester.name }))}
               placeholder="Chọn học kỳ"
               style={{ width: '100%', marginTop: 6 }}
-              onChange={(value: number | undefined) => setSemesterId(value)}
+              onChange={(value: number | undefined) => {
+                setSemesterId(value)
+                const semester = semesters.find((item) => item.id === value)
+                if (semester) setWeekAnchor(semester.start_date)
+              }}
             />
           </div>
           <div style={{ minWidth: 200, flex: '1 1 200px' }}>
@@ -673,8 +677,6 @@ export default function TimetablePage() {
               size="small"
               onClick={() => shiftWeek(1)}
             />
-            <Tag color="blue" style={{ marginInlineEnd: 0 }}>Lý thuyết</Tag>
-            <Tag color="purple" style={{ marginInlineEnd: 0 }}>Thực hành</Tag>
           </Flex>
         }
         styles={{ body: { padding: 12 } }}
