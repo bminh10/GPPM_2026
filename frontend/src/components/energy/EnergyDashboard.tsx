@@ -53,7 +53,7 @@ export default function EnergyDashboard({
   const option = useMemo<EChartsCoreOption>(() => ({
     legend: {
       bottom: 0,
-      formatter: (name) =>
+      formatter: (name: any) =>
         `${name}: ${formatEnergy(
           name === 'Tổng điện năng'
             ? selectedDay?.energy_kwh ?? null
@@ -62,7 +62,7 @@ export default function EnergyDashboard({
     },
     tooltip: {
       trigger: 'item',
-      formatter: (params) => {
+      formatter: (params: any) => {
         const item = params as { name: string; data: { displayValue: string } }
         return `${item.name}<br/>${item.data.displayValue}`
       },
@@ -77,7 +77,7 @@ export default function EnergyDashboard({
         itemStyle: { borderColor: '#fff', borderWidth: 3 },
         label: {
           show: true,
-          formatter: (params) => {
+          formatter: (params: any) => {
             const item = params as { name: string; data: { displayValue: string } }
             return `${item.name}\n${item.data.displayValue}`
           },
