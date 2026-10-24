@@ -3,7 +3,7 @@ import argparse
 import math
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -73,11 +73,16 @@ def ensure_meters(db: Session, lights: list[RoomLight], now: float) -> dict[int,
 
 def summarize(
     db: Session, days: int, offline_seconds: int, campus_id: str | None = None,
-    room_id: str | None = None, now: float | None = None,
+    room_id: str | None = None, now: float | None = None, end_date: date | None = None,
 ) -> dict:
     now = time.time() if now is None else now
     today = datetime.fromtimestamp(now, LOCAL_TIMEZONE).replace(hour=0, minute=0, second=0, microsecond=0)
-    start_day = today - timedelta(days=days - 1)
+    last_day = end_date or today.date()
+    start_day = datetime.combine(last_day - timedelta(days=days - 1), datetime.min.time(), LOCAL_TIMEZONE)
+    period_end = min(
+        datetime.combine(last_day + timedelta(days=1), datetime.min.time(), LOCAL_TIMEZONE).timestamp(),
+        now,
+    )
     start = start_day.timestamp()
     query = db.query(RoomLight, LightEnergyMeter).join(
         LightEnergyMeter, LightEnergyMeter.light_id == RoomLight.id,
@@ -103,7 +108,7 @@ def summarize(
     }
 
     def accumulate(light_id: int, begin: float, end: float, on: bool | None, watts: float) -> None:
-        cursor, end = max(begin, start), min(end, now)
+        cursor, end = max(begin, start), min(end, period_end)
         while cursor < end:
             local = datetime.fromtimestamp(cursor, LOCAL_TIMEZONE)
             boundary = (local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).timestamp()
@@ -126,15 +131,15 @@ def summarize(
     if meters:
         intervals = db.query(LightEnergyInterval).filter(
             LightEnergyInterval.light_id.in_(meters),
-            LightEnergyInterval.end_at > start, LightEnergyInterval.start_at < now,
+            LightEnergyInterval.end_at > start, LightEnergyInterval.start_at < period_end,
         ).all()
         for interval in intervals:
             accumulate(
                 interval.light_id, interval.start_at,
-                min(interval.end_at, meters[interval.light_id].state_since), interval.on, interval.watts,
+                min(interval.end_at, meters[interval.light_id].state_since, period_end), interval.on, interval.watts,
             )
         for meter in meters.values():
-            for begin, end, on, watts in segments(meter, now, offline_seconds):
+            for begin, end, on, watts in segments(meter, period_end, offline_seconds):
                 accumulate(meter.light_id, begin, end, on, watts)
 
     rooms: dict[tuple[str, str], dict] = {}
@@ -168,7 +173,7 @@ def summarize(
     total = sum(room["energy_kwh"] for room in valid)
     return {
         "timezone": "Asia/Ho_Chi_Minh", "start_date": start_day.date().isoformat(),
-        "end_date": today.date().isoformat(), "as_of": now,
+        "end_date": min(last_day, today.date()).isoformat(), "as_of": now,
         "energy_kwh": total if valid else None,
         "average_kwh": total / len(valid) if valid else None,
         "configured_rooms": len(rooms), "rooms_with_data": len(valid),

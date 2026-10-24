@@ -63,7 +63,15 @@ const bulbIcon = {
   mask: true,
 }
 
-export type MapFocus = { center: LngLat; key: number; zoom?: number; elevation?: number }
+export type MapFocus = {
+  center: LngLat
+  key: number
+  zoom?: number
+  elevation?: number
+  bearing?: number
+  pitch?: number
+  offset?: [number, number]
+}
 
 type CampusMapProps = {
   campus: Campus
@@ -76,7 +84,7 @@ type CampusMapProps = {
   focus: MapFocus | null
   onSelectRoom: (roomId: string) => void
   onSelectBuilding: (buildingId: string) => void
-  onSelectNone: () => void
+  onSelectCampusGround: () => void
   isRoomLightOn: (roomId: string, lightId: string) => boolean
   onToggleRoomLight: (roomId: string, lightId: string) => void
 }
@@ -102,7 +110,7 @@ export default function CampusMap({
   focus,
   onSelectRoom,
   onSelectBuilding,
-  onSelectNone,
+  onSelectCampusGround,
   isRoomLightOn,
   onToggleRoomLight,
 }: CampusMapProps) {
@@ -167,29 +175,22 @@ export default function CampusMap({
       targetElevation = 0
     }
 
-    console.log('[CampusMap focus]', {
-      focusKey: focus.key,
-      focusElevation: focus.elevation,
-      targetElevation,
-      selectedBuildingId,
-      selectedFloor,
-    })
-
     map.setCenterClampedToGround(false)
 
-    // Chi thuc hien mot animation camera
     map.easeTo({
       center: focus.center,
       zoom,
       elevation: targetElevation,
-      pitch: 58,
-      bearing: -25,
-      duration: 1400,
+      offset: focus.offset ?? (selectedRoomId ? [-60, 0] : [0, 0]),
+      pitch: focus.pitch ?? (selectedRoomId ? 55 : 58),
+      bearing: focus.bearing ?? -25,
+      duration: 1800,
       essential: true,
     })
   }, [
     focus,
     BUILDINGS,
+    selectedRoomId,
     selectedBuildingId,
     selectedFloor,
   ])
@@ -273,7 +274,7 @@ export default function CampusMap({
         getElevation: 0.3,
         getFillColor: hexToRgba(colors.primary.light, 150),
         pickable: true,
-        onClick: () => onSelectNone(),
+        onClick: () => onSelectCampusGround(),
         material: false,
       }),
       new PolygonLayer({
@@ -489,7 +490,7 @@ export default function CampusMap({
     hotspotOffset,
     onSelectRoom,
     onSelectBuilding,
-    onSelectNone,
+    onSelectCampusGround,
     isRoomLightOn,
     onToggleRoomLight,
   ])
@@ -500,8 +501,8 @@ export default function CampusMap({
       initialViewState={{
         longitude: campus.center[0],
         latitude: campus.center[1],
-        zoom: campus.zoom,
-        pitch: 58,
+        zoom: campus.zoom - 1,
+        pitch: 45,
         bearing: -25,
       }}
       maxPitch={75}

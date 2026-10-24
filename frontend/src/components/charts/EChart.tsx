@@ -1,11 +1,20 @@
 import { useEffect, useRef } from 'react'
-import { BarChart, HeatmapChart } from 'echarts/charts'
+import { BarChart, HeatmapChart, PieChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent, VisualMapComponent } from 'echarts/components'
 import { init, use as registerEChartsModules } from 'echarts/core'
 import type { ECharts, EChartsCoreOption } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 
-registerEChartsModules([BarChart, HeatmapChart, GridComponent, LegendComponent, TooltipComponent, VisualMapComponent, CanvasRenderer])
+registerEChartsModules([
+  BarChart,
+  HeatmapChart,
+  PieChart,
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+  VisualMapComponent,
+  CanvasRenderer,
+])
 
 export default function EChart({ option, label = 'Biểu đồ phân tích', height = 350 }: {
   option: EChartsCoreOption; label?: string; height?: number

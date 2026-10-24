@@ -6,7 +6,7 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
-from datetime import datetime
+from datetime import date, datetime
 
 _directory = tempfile.TemporaryDirectory()
 os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(_directory.name, "lighting.db")
@@ -220,6 +220,13 @@ class LightingTests(unittest.TestCase):
             self.assertAlmostEqual(result["average_kwh"], .03)
             self.assertAlmostEqual(result["daily"][0]["energy_kwh"], .01)
             self.assertAlmostEqual(result["daily"][1]["energy_kwh"], .02)
+            historical_day = energy.summarize(
+                db, 1, 3600, now=midnight + 1800, end_date=date(2026, 10, 23),
+            )
+            self.assertEqual(historical_day["start_date"], "2026-10-23")
+            self.assertEqual(historical_day["end_date"], "2026-10-23")
+            self.assertEqual(len(historical_day["daily"]), 1)
+            self.assertAlmostEqual(historical_day["energy_kwh"], .01)
         # No report for 2 hours: count only until the 1-hour grace boundary.
         with SessionLocal() as db:
             result = energy.summarize(db, 1, 3600, now=midnight + 9000)

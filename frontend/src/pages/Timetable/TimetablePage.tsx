@@ -147,12 +147,15 @@ function formatTime(value: string) {
 
 export default function TimetablePage() {
   const queryClient = useQueryClient()
-  const [semesterId, setSemesterId] = useState<number>()
+  const [semesterId, setSemesterId] = useState<number | undefined>(() => {
+    const savedSemesterId = window.sessionStorage.getItem('timetable.semesterId')
+    return savedSemesterId ? Number(savedSemesterId) : undefined
+  })
   const [campusId, setCampusId] = useState<number>()
   const [facultyId, setFacultyId] = useState<number>()
   const [majorId, setMajorId] = useState<number>()
   const [roomId, setRoomId] = useState<number>()
-  const [weekAnchor, setWeekAnchor] = useState(() => toDateString(new Date()))
+  const [weekAnchorOverride, setWeekAnchorOverride] = useState<string>()
   const [draggedScheduleId, setDraggedScheduleId] = useState<number | null>(null)
   const [movingScheduleId, setMovingScheduleId] = useState<number | null>(null)
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
@@ -231,7 +234,14 @@ export default function TimetablePage() {
       registrations.find((registration) => registration.id === editingRegistrationId)?.mon_id,
   )?.is_thuc_hanh
 
-  const selectedSemesterId = semesterId ?? semesters[0]?.id
+  const selectedSemesterId = semesters.some((semester) => semester.id === semesterId)
+    ? semesterId
+    : semesters[0]?.id
+  const selectedSemester = semesters.find((semester) => semester.id === selectedSemesterId)
+  const weekAnchor = useMemo(
+    () => weekAnchorOverride ?? selectedSemester?.start_date ?? toDateString(new Date()),
+    [weekAnchorOverride, selectedSemester?.start_date],
+  )
 
   const scheduleParams = useMemo(() => ({
     ...(selectedSemesterId !== undefined ? { semester_id: selectedSemesterId } : {}),
@@ -305,10 +315,9 @@ export default function TimetablePage() {
   const shiftWeek = (amount: number) => {
     const nextWeek = new Date(weekStart)
     nextWeek.setDate(nextWeek.getDate() + amount * 7)
-    setWeekAnchor(toDateString(nextWeek))
+    setWeekAnchorOverride(toDateString(nextWeek))
   }
 
-  const selectedSemester = semesters.find((semester) => semester.id === selectedSemesterId)
   const availableMajors = majors.filter(
     (major) => facultyId === undefined || major.khoa_id === facultyId,
   )
@@ -591,8 +600,14 @@ export default function TimetablePage() {
               style={{ width: '100%', marginTop: 6 }}
               onChange={(value: number | undefined) => {
                 setSemesterId(value)
+                if (value === undefined) {
+                  window.sessionStorage.removeItem('timetable.semesterId')
+                  setWeekAnchorOverride(undefined)
+                  return
+                }
+                window.sessionStorage.setItem('timetable.semesterId', String(value))
                 const semester = semesters.find((item) => item.id === value)
-                if (semester) setWeekAnchor(semester.start_date)
+                setWeekAnchorOverride(semester?.start_date)
               }}
             />
           </div>

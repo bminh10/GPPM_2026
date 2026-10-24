@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { getEnergy, type EnergySummary } from '../services/EnergyService'
 import { getErrorMessage } from '../services/apiClient'
 
-export function useEnergy(days: number, campus?: string, room?: string) {
-  const key = JSON.stringify([days, campus, room])
+export function useEnergy(days: number, campus?: string, room?: string, endDate?: string) {
+  const key = JSON.stringify([days, campus, room, endDate])
   const [result, setResult] = useState<{ key: string; data: EnergySummary } | null>(null)
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null)
   const [version, setVersion] = useState(0)
@@ -14,7 +14,7 @@ export function useEnergy(days: number, campus?: string, room?: string) {
     let timer: ReturnType<typeof setTimeout>
     const poll = async () => {
       try {
-        const data = await getEnergy(days, campus, room, controller.signal)
+        const data = await getEnergy(days, campus, room, endDate, controller.signal)
         if (!controller.signal.aborted) {
           setResult({ key, data })
           setFailure(null)
@@ -27,7 +27,7 @@ export function useEnergy(days: number, campus?: string, room?: string) {
     }
     void poll()
     return () => { controller.abort(); clearTimeout(timer) }
-  }, [days, campus, room, key, version])
+  }, [days, campus, room, endDate, key, version])
 
   return {
     data: result?.key === key ? result.data : null,

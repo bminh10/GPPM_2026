@@ -12,8 +12,6 @@ type Props = {
   rooms: Room[]
   buildings: Building[]
   scheduledRoomNames: string[]
-  scheduleKnown: boolean
-  scheduleLoading: boolean
   selectedRoomId: string | null
   onSelectRoom: (roomId: string) => void
 }
@@ -22,8 +20,6 @@ export default function RoomListPanel({
   rooms: allRooms,
   buildings,
   scheduledRoomNames,
-  scheduleKnown,
-  scheduleLoading,
   selectedRoomId,
   onSelectRoom,
 }: Props) {
@@ -55,13 +51,6 @@ export default function RoomListPanel({
           const hasSchedule = scheduledRoomNames.some(
             (name) => normalizeRoomCode(name) === normalizeRoomCode(room.code),
           )
-          const scheduleLabel = hasSchedule
-            ? 'Có lịch trong ngày'
-            : scheduleKnown
-              ? 'Không có lịch'
-              : scheduleLoading
-                ? 'Đang tải lịch'
-                : 'Chưa xác định'
           const color = hasSchedule ? '#1677ff' : ROOM_STATE_META.available.color
           return (
             <Card
@@ -77,7 +66,6 @@ export default function RoomListPanel({
               <Flex justify="space-between" align="center">
                 <Typography.Text strong>{room.code}</Typography.Text>
                 <Flex gap={4}>
-                  <Tag color={hasSchedule ? '#1677ff' : 'default'}>{scheduleLabel}</Tag>
                   <Tag color="blue" variant="filled">
                     {room.databaseBuilding || buildings.find((b) => b.id === room.buildingId)?.name} · T{room.floor}
                   </Tag>
