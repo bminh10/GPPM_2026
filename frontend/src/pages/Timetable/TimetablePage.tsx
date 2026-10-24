@@ -148,6 +148,7 @@ function formatTime(value: string) {
 export default function TimetablePage() {
   const queryClient = useQueryClient()
   const [semesterId, setSemesterId] = useState<number>()
+  const [campusId, setCampusId] = useState<number>()
   const [facultyId, setFacultyId] = useState<number>()
   const [majorId, setMajorId] = useState<number>()
   const [roomId, setRoomId] = useState<number>()
@@ -273,13 +274,15 @@ export default function TimetablePage() {
 
   const visibleSchedules = useMemo(
     () => schedules.filter((schedule) =>
+      (campusId === undefined ||
+        rooms.find((room) => room.id === schedule.phong_hoc_id)?.campus_id === campusId) &&
       weekDays.some((day) =>
         day.dayOfWeek === schedule.day_of_week &&
         day.date >= schedule.start_date &&
         day.date <= schedule.end_date,
       ),
     ),
-    [schedules, weekDays],
+    [campusId, rooms, schedules, weekDays],
   )
 
   const orderedSlots = useMemo(() => {
@@ -533,7 +536,7 @@ export default function TimetablePage() {
         <div>
           <Typography.Title level={3} style={{ margin: 0 }}>Thời khóa biểu</Typography.Title>
           <Typography.Text type="secondary">
-            Xem lịch học theo tuần, học kỳ, khoa, ngành và phòng.
+            Xem lịch học theo tuần, học kỳ, cơ sở, khoa, ngành và phòng.
           </Typography.Text>
         </div>
         <Space wrap>
@@ -594,6 +597,21 @@ export default function TimetablePage() {
             />
           </div>
           <div style={{ minWidth: 200, flex: '1 1 200px' }}>
+            <Typography.Text strong>Cơ sở</Typography.Text>
+            <SearchFilterSelect
+              aria-label="Lọc theo cơ sở"
+              allowClear
+              value={campusId}
+              options={campuses.map((campus) => ({
+                value: campus.id,
+                label: campus.name,
+              }))}
+              placeholder="Tất cả cơ sở"
+              style={{ width: '100%', marginTop: 6 }}
+              onChange={(value: number | undefined) => setCampusId(value)}
+            />
+          </div>
+          <div style={{ minWidth: 200, flex: '1 1 200px' }}>
             <Typography.Text strong>Khoa</Typography.Text>
             <SearchFilterSelect
               aria-label="Lọc theo khoa"
@@ -639,18 +657,6 @@ export default function TimetablePage() {
               placeholder="Tất cả phòng"
               style={{ width: '100%', marginTop: 6 }}
               onChange={(value: number | undefined) => setRoomId(value)}
-            />
-          </div>
-          <div style={{ minWidth: 170 }}>
-            <Typography.Text strong>Tuần có ngày</Typography.Text>
-            <Input
-              aria-label="Chọn ngày trong tuần"
-              type="date"
-              value={weekAnchor}
-              onChange={(event) => {
-                if (event.target.value) setWeekAnchor(event.target.value)
-              }}
-              style={{ marginTop: 6 }}
             />
           </div>
         </Flex>
