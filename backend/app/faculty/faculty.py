@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from db.database import Khoa, Nganh, get_db
 from utils.commit import commit_db
+from utils.audit_details import record_update_details
 
 router = APIRouter(prefix="/faculties", tags=["Faculties"])
 
@@ -31,7 +32,7 @@ def get_faculties(
     query = db.query(Khoa)
     if name:
         query = query.filter(Khoa.name.ilike(f"%{name}%"))
-    return query.order_by(Khoa.id).all()
+    return query.order_by(Khoa.name).all()
 
 
 @router.get("/{id}", response_model=FacultyResponse)
@@ -55,6 +56,7 @@ def create_faculty(data: FacultyData, db: Session = Depends(get_db)):
 def update_faculty(
     id: int,
     data: FacultyUpdate,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     faculty = db.query(Khoa).filter(Khoa.id == id).first()
@@ -70,6 +72,7 @@ def update_faculty(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Faculty name cannot be null",
         )
+    record_update_details(request, "faculty", faculty, id, update_data)
     for field, value in update_data.items():
         setattr(faculty, field, value)
 

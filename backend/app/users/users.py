@@ -19,7 +19,8 @@ def _get_user_or_404(user_id: int, db: Session) -> User:
 
 @router.get("/all", response_model=list[UserResponse])
 def get_all_users(db: Session = Depends(get_db)):
-    return [UserResponse.from_user(u) for u in db.query(User).order_by(User.id).all()]
+    users = db.query(User).order_by(User.user_name, User.email).all()
+    return [UserResponse.from_user(user) for user in users]
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

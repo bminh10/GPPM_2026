@@ -16,6 +16,7 @@ from sqlalchemy import (
     create_engine,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 load_dotenv()
@@ -234,6 +235,7 @@ class AuditLog(Base):
     method = Column(String, nullable=False)
     path = Column(String, nullable=False)
     status_code = Column(Integer, nullable=False)
+    details = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
