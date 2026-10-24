@@ -6,7 +6,9 @@ from db.database import Role, User, get_db
 
 
 def is_admin(user: User) -> bool:
-    return user.role is not None and user.role.name.strip().lower() in ADMIN_ROLE_NAMES
+    return user.role is not None and "".join(user.role.name.split()).lower() in {
+        "".join(name.split()).lower() for name in ADMIN_ROLE_NAMES
+    }
 
 
 def get_or_create_default_role(db: Session) -> Role:

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MapGL, { useControl, type MapRef } from 'react-map-gl/maplibre'
 import { MapboxOverlay, type MapboxOverlayProps } from '@deck.gl/mapbox'
-import { IconLayer, PathLayer, PolygonLayer, TextLayer } from '@deck.gl/layers'
+import { IconLayer, PathLayer, PolygonLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers'
 import EnvironmentOutlined from '@ant-design/icons-svg/es/asn/EnvironmentOutlined'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { colors, hexToRgba } from '../../theme/colors'
+import { FONT_FAMILY } from '../../theme/font'
+import type { RoomLight } from '../../data/roomLighting'
 import {
   ROOM_STATE_META,
   getRoomState,
@@ -47,6 +49,18 @@ const environmentIcon = {
   mask: true,
 }
 
+const bulbIcon = {
+  id: 'room-bulb',
+  url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40"><path fill="white" d="M16 2a12 12 0 0 0-8 21c2 2 3 4 3 7h10c0-3 1-5 3-7A12 12 0 0 0 16 2Z"/><path d="m11 13 5 6 5-6M16 19v11" fill="none" stroke="black" stroke-width="2"/><path fill="white" d="M11 32h10v3H11zm2 5h6v2h-6z"/></svg>',
+  )}`,
+  width: 32,
+  height: 40,
+  anchorX: 16,
+  anchorY: 20,
+  mask: true,
+}
+
 export type MapFocus = { center: LngLat; key: number; zoom?: number }
 
 type CampusMapProps = {
@@ -60,6 +74,8 @@ type CampusMapProps = {
   onSelectRoom: (roomId: string) => void
   onSelectBuilding: (buildingId: string) => void
   onSelectNone: () => void
+  isRoomLightOn: (roomId: string, lightId: string) => boolean
+  onToggleRoomLight: (roomId: string, lightId: string) => void
 }
 
 function DeckOverlay(props: MapboxOverlayProps) {
@@ -83,6 +99,8 @@ export default function CampusMap({
   onSelectRoom,
   onSelectBuilding,
   onSelectNone,
+  isRoomLightOn,
+  onToggleRoomLight,
 }: CampusMapProps) {
   const mapRef = useRef<MapRef | null>(null)
   const [hotspotOffset, setHotspotOffset] = useState(0)
@@ -154,6 +172,22 @@ export default function CampusMap({
     }
 
     const boundary = campus.boundary
+    const openRoom = visibleRooms.find((r) => r.id === selectedRoomId)
+    const lights = visibleRooms.flatMap((room) =>
+      room.lights.map((light) => ({
+        ...light,
+        room,
+        position: [...light.position, floorBase + roomElevation(room) * 0.5] as [number, number, number],
+      })),
+    )
+    type LightDatum = Omit<RoomLight, 'position'> & { room: Room; position: [number, number, number] }
+    const walls = openRoom ? openRoom.polygon.map((point, index, ring) => {
+      const next = ring[(index + 1) % ring.length]
+      const top = floorBase + roomElevation(openRoom)
+      return { polygon: [
+        [...point, floorBase], [...next, floorBase], [...next, top], [...point, top],
+      ] as [number, number, number][] }
+    }) : []
     const boundaryClosed = [...boundary, boundary[0]]
     const nameAnchor: [number, number, number] = [
       (boundary[0][0] + boundary[1][0]) / 2,
@@ -196,7 +230,7 @@ export default function CampusMap({
         id: 'campus-name',
         data: [{ position: nameAnchor }],
         characterSet: 'auto',
-        fontFamily: 'Inter, Segoe UI, sans-serif',
+        fontFamily: FONT_FAMILY,
         fontWeight: 700,
         getPosition: (d) => d.position,
         getText: () => campus.name,
@@ -237,7 +271,7 @@ export default function CampusMap({
       }),
       new PolygonLayer({
         id: 'rooms',
-        data: visibleRooms,
+        data: visibleRooms.filter((r) => r.id !== selectedRoomId),
         extruded: true,
         wireframe: true,
         getPolygon: (r) => withZ(r.polygon, floorBase),
@@ -257,11 +291,30 @@ export default function CampusMap({
           getElevation: [selectedRoomId],
         },
       }),
+      new PolygonLayer<Room>({
+        id: 'open-room-floor',
+        data: openRoom ? [openRoom] : [],
+        stroked: false,
+        getPolygon: (r) => withZ(r.polygon, floorBase + 0.05),
+        getFillColor: (r) => hexToRgba(ROOM_STATE_META[getRoomState(r)].color, 130),
+        pickable: true,
+        onClick: (info) => info.object && onSelectRoom(info.object.id),
+      }),
+      new PolygonLayer({
+        id: 'open-room-walls',
+        data: walls,
+        getPolygon: (d) => d.polygon,
+        getFillColor: openRoom ? hexToRgba(ROOM_STATE_META[getRoomState(openRoom)].color, 65) : [0, 0, 0, 0],
+        stroked: true,
+        getLineColor: hexToRgba(colors.primary.DEFAULT, 130),
+        lineWidthMinPixels: 1,
+        parameters: { depthWriteEnabled: false, cullMode: 'none' },
+      }),
       new TextLayer({
         id: 'room-labels',
         data: visibleRooms,
         characterSet: 'auto',
-        fontFamily: 'Inter, Segoe UI, sans-serif',
+        fontFamily: FONT_FAMILY,
         fontWeight: 700,
         getPosition: (r) =>
           [...r.center, floorBase + roomElevation(r) + 0.6 + hotspotOffset] as [number, number, number],
@@ -276,26 +329,45 @@ export default function CampusMap({
         onClick: (info) => info.object && onSelectRoom(info.object.id),
         updateTriggers: { getPosition: [selectedRoomId, hotspotOffset] },
       }),
-      new IconLayer({
-        id: 'room-hotspots',
-        data: visibleRooms,
-        getIcon: () => environmentIcon,
-        getPosition: (r) =>
-          [...r.center, floorBase + roomElevation(r) + 0.6 + hotspotOffset] as [number, number, number],
-        getSize: 24,
+      new ScatterplotLayer<LightDatum>({
+        id: 'room-light-glow',
+        data: lights,
+        getPosition: (light) => light.position,
+        getRadius: (light) => isRoomLightOn(light.room.id, light.id) ? 22 : 0,
+        radiusUnits: 'pixels',
+        getFillColor: hexToRgba(colors.warning.DEFAULT, 75),
+        billboard: true,
+        pickable: false,
+        updateTriggers: {
+          getPosition: [selectedRoomId, floorBase],
+          getRadius: [isRoomLightOn],
+        },
+      }),
+      new IconLayer<LightDatum>({
+        id: 'room-light-bulbs',
+        data: lights,
+        getIcon: () => bulbIcon,
+        getPosition: (light) => light.position,
+        getSize: 36,
         sizeUnits: 'pixels',
-        getColor: hexToRgba(colors.primary.dark),
-        getPixelOffset: [0, -20],
+        getColor: (light) => hexToRgba(isRoomLightOn(light.room.id, light.id) ? colors.warning.DEFAULT : colors.text.secondary),
         billboard: true,
         pickable: true,
-        onClick: (info) => info.object && onSelectRoom(info.object.id),
-        updateTriggers: { getPosition: [selectedRoomId, hotspotOffset] },
+        onClick: (info) => {
+          if (!info.object) return
+          onToggleRoomLight(info.object.room.id, info.object.id)
+          onSelectRoom(info.object.room.id)
+        },
+        updateTriggers: {
+          getPosition: [selectedRoomId, hotspotOffset],
+          getColor: [isRoomLightOn],
+        },
       }),
       new TextLayer({
         id: 'building-labels',
         data: BUILDINGS,
         characterSet: 'auto',
-        fontFamily: 'Inter, Segoe UI, sans-serif',
+        fontFamily: FONT_FAMILY,
         fontWeight: 700,
         getPosition: (b) =>
           [...b.center, b.floors * b.floorHeight + 4 + hotspotOffset] as [number, number, number],
@@ -337,6 +409,8 @@ export default function CampusMap({
     onSelectRoom,
     onSelectBuilding,
     onSelectNone,
+    isRoomLightOn,
+    onToggleRoomLight,
   ])
 
   return (

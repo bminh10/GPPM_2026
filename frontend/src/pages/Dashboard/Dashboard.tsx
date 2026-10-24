@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Alert,
   Button,
@@ -21,25 +21,14 @@ import {
   TeamOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
-import { BarChart, HeatmapChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, VisualMapComponent } from 'echarts/components'
-import { init, use as registerEChartsModules } from 'echarts/core'
-import type { ECharts, EChartsCoreOption } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { EChartsCoreOption } from 'echarts/core'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
+import EChart from '../../components/charts/EChart'
+import EnergyDashboard from '../../components/energy/EnergyDashboard'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 import SearchableTable from '../../components/common/SearchableTable'
 import './Dashboard.css'
-
-registerEChartsModules([
-  BarChart,
-  HeatmapChart,
-  GridComponent,
-  TooltipComponent,
-  VisualMapComponent,
-  CanvasRenderer,
-])
 
 type RoomUtilization = {
   room_id: number
@@ -371,6 +360,8 @@ export default function Dashboard() {
         <div className="dashboard-hero-decoration" aria-hidden="true" />
       </section>
 
+      <EnergyDashboard />
+
       <Card className="dashboard-filter-panel">
         <Flex vertical gap={16}>
           <Flex align="center" justify="space-between" wrap="wrap" gap={12}>
@@ -636,30 +627,4 @@ export default function Dashboard() {
       </Spin>
     </Flex>
   )
-}
-
-function EChart({ option, height = 350 }: { option: EChartsCoreOption; height?: number }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<ECharts | null>(null)
-
-  useEffect(() => {
-    if (!containerRef.current) return
-
-    const chart = init(containerRef.current)
-    chartRef.current = chart
-    const observer = new ResizeObserver(() => chart.resize())
-    observer.observe(containerRef.current)
-
-    return () => {
-      observer.disconnect()
-      chart.dispose()
-      chartRef.current = null
-    }
-  }, [])
-
-  useEffect(() => {
-    chartRef.current?.setOption(option, { notMerge: true })
-  }, [option])
-
-  return <div ref={containerRef} style={{ width: '100%', height }} />
 }

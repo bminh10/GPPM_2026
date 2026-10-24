@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Card, Flex, Spin } from 'antd'
+import { Alert, Card, Flex, Spin } from 'antd'
 import CampusMap, { type MapFocus } from '../../components/map/CampusMap'
 import BuildingSelector from '../../components/map/BuildingSelector'
 import FloorSelector from '../../components/map/FloorSelector'
@@ -7,19 +7,29 @@ import RoomListPanel from '../../components/map/RoomListPanel'
 import RoomDetailCard from '../../components/map/RoomDetailCard'
 import MapLegend from '../../components/map/MapLegend'
 import { loadCampusDataset, type CampusDataset } from '../../data/campusData'
+import { useRoomLighting } from '../../hooks/useRoomLighting'
+import { lightAddress } from '../../services/LightingService'
+import { useAuth } from '../../store/authStore'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 
 export default function Map() {
   const [dataset, setDataset] = useState<CampusDataset | null>(null)
   const [campusId, setCampusId] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const lighting = useRoomLighting()
+  const { user } = useAuth()
+  const canControl = ['admin', 'superadmin'].includes(user?.role?.replace(/\s/g, '').toLowerCase() ?? '')
 
   useEffect(() => {
     loadCampusDataset().then((d) => {
       setDataset(d)
       setCampusId(d.campuses[0]?.id ?? null)
+    }).catch((error: unknown) => {
+      setLoadError(error instanceof Error ? error.message : 'Không thể tải dữ liệu bản đồ')
     })
   }, [])
 
+  if (loadError) return <Alert type="error" title="Lỗi dữ liệu bản đồ" description={loadError} showIcon />
   if (!dataset || !campusId) {
     return (
       <Flex justify="center" align="center" style={{ height: 300 }}>
@@ -29,12 +39,18 @@ export default function Map() {
   }
 
   return (
+    <Flex vertical gap={8}>
+      {lighting.error && <Alert type="error" showIcon title="Không đồng bộ được đèn" description={lighting.error} />}
+      <Alert type="info" showIcon title="Đèn IoT mô phỏng · Trạng thái chỉ được xác nhận sau khi ESP32 báo về. Thiết bị cần chạy Wokwi." />
     <CampusView
       key={campusId}
       dataset={dataset}
       campusId={campusId}
       onChangeCampus={setCampusId}
+      lighting={lighting}
+      canControl={canControl}
     />
+    </Flex>
   )
 }
 
@@ -42,9 +58,11 @@ type ViewProps = {
   dataset: CampusDataset
   campusId: string
   onChangeCampus: (id: string) => void
+  lighting: ReturnType<typeof useRoomLighting>
+  canControl: boolean
 }
 
-function CampusView({ dataset, campusId, onChangeCampus }: ViewProps) {
+function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }: ViewProps) {
   const campus = dataset.campuses.find((c) => c.id === campusId)!
   const buildings = useMemo(() => dataset.buildings.filter((b) => b.campusId === campusId), [dataset, campusId])
   const rooms = useMemo(() => dataset.rooms.filter((r) => r.campusId === campusId), [dataset, campusId])
@@ -57,6 +75,16 @@ function CampusView({ dataset, campusId, onChangeCampus }: ViewProps) {
 
   const building = buildings.find((b) => b.id === buildingId) ?? null
   const selectedRoom = rooms.find((r) => r.id === roomId) ?? null
+  const isRoomLightOn = useCallback(
+    (id: string, lightId: string) => lighting.lights[lightAddress(campusId, id, lightId)]?.reported_on ?? false,
+    [campusId, lighting.lights],
+  )
+  const toggleLight = useCallback(
+    (id: string, lightId: string) => {
+      if (canControl) void lighting.toggle(campusId, id, lightId)
+    },
+    [campusId, canControl, lighting],
+  )
 
   const selectRoom = useCallback(
     (id: string) => {
@@ -118,6 +146,8 @@ function CampusView({ dataset, campusId, onChangeCampus }: ViewProps) {
           onSelectRoom={selectRoom}
           onSelectBuilding={selectBuilding}
           onSelectNone={selectNone}
+          isRoomLightOn={isRoomLightOn}
+          onToggleRoomLight={toggleLight}
         />
       </Flex>
 
@@ -152,10 +182,15 @@ function CampusView({ dataset, campusId, onChangeCampus }: ViewProps) {
       )}
 
       {selectedRoom && (
-        <Flex style={{ position: 'absolute', right: 84, bottom: 16, width: 320, zIndex: 2 }}>
+        <Flex style={{ position: 'absolute', right: 84, bottom: 16, width: 350, maxHeight: 'calc(100% - 32px)', overflowY: 'auto', zIndex: 2 }}>
           <RoomDetailCard
             room={selectedRoom}
             buildingName={building?.name ?? ''}
+            isLightOn={(lightId) => isRoomLightOn(selectedRoom.id, lightId)}
+            onToggleLight={(lightId) => toggleLight(selectedRoom.id, lightId)}
+            getLightStatus={(lightId) => lighting.lights[lightAddress(campusId, selectedRoom.id, lightId)]}
+            isSending={(lightId) => lighting.sending.has(lightAddress(campusId, selectedRoom.id, lightId))}
+            canControl={canControl && !lighting.error}
             onClose={() => setRoomId(null)}
           />
         </Flex>
