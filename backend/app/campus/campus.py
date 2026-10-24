@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from requests import Session
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from db.database import get_db, Campus
 from utils.commit import commit_db
