@@ -124,22 +124,28 @@ export default function CampusMap({
   }, [])
 
 
+
+
   useEffect(() => {
     if (!focus || !mapRef.current) return
 
     const map = mapRef.current
     const zoom = focus.zoom ?? 19.3
 
-    // Tim toa nha dang duoc chon
     const building = BUILDINGS.find(
       (item) => item.id === selectedBuildingId,
     )
 
-    // Neu da chon toa nha, luon tinh do cao theo tang hien tai.
-    // Khong su dung focus.elevation = 0 de ghi de do cao tang.
-    let targetElevation = focus.elevation ?? 0
+    let targetElevation: number
 
-    if (building) {
+    // Uu tien cao do duoc tinh tu phong dang nhan
+    if (
+      typeof focus.elevation === 'number' &&
+      Number.isFinite(focus.elevation)
+    ) {
+      targetElevation = focus.elevation
+    } else if (building) {
+      // Chi tinh theo tang khi focus khong co elevation
       const floorIndex = Math.max(0, selectedFloor - 1)
 
       const floorBase =
@@ -148,19 +154,27 @@ export default function CampusMap({
         VERTICAL_EXAGGERATION +
         PLATE_THICKNESS * VERTICAL_EXAGGERATION
 
-      // Dua camera vao gan giua chieu cao khoi phong
       const roomHeight =
         building.floorHeight *
         0.7 *
         VERTICAL_EXAGGERATION
 
       targetElevation = floorBase + roomHeight / 2
+    } else {
+      targetElevation = 0
     }
+
+    console.log('[CampusMap focus]', {
+      focusKey: focus.key,
+      focusElevation: focus.elevation,
+      targetElevation,
+      selectedBuildingId,
+      selectedFloor,
+    })
 
     map.setCenterClampedToGround(false)
 
-    // Di chuyen camera trong mot animation duy nhat.
-    // Khong goi setCenterElevation sau moveend.
+    // Chi thuc hien mot animation camera
     map.easeTo({
       center: focus.center,
       zoom,
@@ -176,6 +190,7 @@ export default function CampusMap({
     selectedBuildingId,
     selectedFloor,
   ])
+
 
   const layers = useMemo(() => {
     const primary = colors.primary.DEFAULT
