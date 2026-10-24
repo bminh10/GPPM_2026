@@ -1,6 +1,17 @@
 @import "tailwindcss";
 
+/* Chỉ nạp subset latin + vietnamese, 4 độ đậm cần dùng (~12-22 KB/file, tải theo ký tự sử dụng) */
+@import "@fontsource/be-vietnam-pro/latin-400.css";
+@import "@fontsource/be-vietnam-pro/latin-500.css";
+@import "@fontsource/be-vietnam-pro/latin-600.css";
+@import "@fontsource/be-vietnam-pro/latin-700.css";
+@import "@fontsource/be-vietnam-pro/vietnamese-400.css";
+@import "@fontsource/be-vietnam-pro/vietnamese-500.css";
+@import "@fontsource/be-vietnam-pro/vietnamese-600.css";
+@import "@fontsource/be-vietnam-pro/vietnamese-700.css";
+
 @theme {
+  --font-sans: 'Be Vietnam Pro', 'Segoe UI', system-ui, -apple-system, Tahoma, Arial, sans-serif;
   --color-primary: #0a5ca8;
   --color-primary-light: #e6f1fb;
   --color-primary-dark: #004ea2;
@@ -66,7 +77,8 @@ body,
 
 body {
   margin: 0;
-  font-family: Inter, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
   color: #1e293b;
   background: var(--color-bg-main);
 }

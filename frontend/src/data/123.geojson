@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "room-3d",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{"type":"Feature","properties":{"kind":"room","id":"B203","code":"B203","name":"Phòng Studio","buildingId":"B","floor":"2","capacity":"40","occupancy":"8","floorHeight":"4.5","baseHeight":"4.5","displayHeight":"3.5","maintenance":"false"},"geometry":{"type":"Polygon","coordinates":[[[106.685623314987183,10.777284151188182],[106.685612505008748,10.777231354310517],[106.685669412662108,10.777221513322383],[106.685687228375556,10.777273405590734],[106.685625067624414,10.77728414165216],[106.685623314987183,10.777284151188182]]]}}
+]
+}

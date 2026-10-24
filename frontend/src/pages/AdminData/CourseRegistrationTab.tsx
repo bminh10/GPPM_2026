@@ -425,7 +425,7 @@ export default function CourseRegistrationTab() {
   return (
     <Space direction="vertical" size="large" style={{ display: 'flex' }}>
       {contextHolder}
-      <Card title="Tạo đăng ký môn học">
+      {/* <Card title="Tạo đăng ký môn học">
         {referencesError && (
           <Alert
             type="error"
@@ -482,7 +482,7 @@ export default function CourseRegistrationTab() {
             Tạo đăng ký
           </Button>
         </Form>
-      </Card>
+      </Card> */}
       <Card
         title="Nhập đăng ký môn học bằng CSV"
         extra={

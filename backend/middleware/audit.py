@@ -10,6 +10,8 @@ _IGNORED_POST_PATHS = {
     "/auth/login",
     "/auth/refresh",
     "/auth/logout",
+    "/iot/device/connect",
+    "/iot/device/sync",
 }
 
 
