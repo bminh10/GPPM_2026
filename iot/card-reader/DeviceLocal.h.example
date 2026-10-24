@@ -1,0 +1,9 @@
+#pragma once
+#define READER_WIFI_SSID ""
+#define READER_WIFI_PASSWORD ""
+#define READER_ID "card-reader-01"
+#define READER_API_URL "http://192.168.1.10:8000"
+#define READER_DEVICE_KEY "CONFIGURE_USING_SETUP_SCRIPT"
+// HTTP is only for a trusted development LAN. Use validated HTTPS for deployment.
+#define READER_ALLOW_LAN_HTTP true
+#define READER_ROOT_CA ""

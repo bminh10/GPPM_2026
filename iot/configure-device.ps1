@@ -1,20 +1,43 @@
 param(
     [Parameter(Mandatory = $true)][string]$Project,
-    [Parameter(Mandatory = $true)][string]$DeviceId,
-    [Parameter(Mandatory = $true)][string]$CampusId,
-    [Parameter(Mandatory = $true)][string]$RoomId,
-    [string[]]$LightIds = @("light-1", "light-2"),
+    [string]$DeviceId,
+    [string]$CampusId,
+    [string]$RoomId,
+    [string[]]$LightIds,
     [string]$ApiUrl = "http://host.wokwi.internal:8000",
     [string]$CaCertificate,
     [switch]$RotateKey
 )
 $ErrorActionPreference = "Stop"
-$folder = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot $Project)).Path
-if (-not $folder.StartsWith($PSScriptRoot + "\", [StringComparison]::OrdinalIgnoreCase) -or
+$projectRoot = Join-Path $PSScriptRoot "light-room"
+$folder = (Resolve-Path -LiteralPath (Join-Path $projectRoot $Project)).Path
+if (-not $folder.StartsWith($projectRoot + "\", [StringComparison]::OrdinalIgnoreCase) -or
     -not (Test-Path -LiteralPath (Join-Path $folder "platformio.ini"))) {
     throw "Project must be an IoT project folder under this directory."
 }
 $headerPath = Join-Path $folder "DeviceLocal.h"
+$metadataPath = Join-Path $folder "device.json"
+if (Test-Path -LiteralPath $metadataPath) {
+    $metadata = Get-Content -LiteralPath $metadataPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($field in @("DeviceId", "CampusId", "RoomId")) {
+        $configured = [string]$metadata.$field
+        if (-not $configured) { throw "device.json is missing $field" }
+        $provided = Get-Variable -Name $field -ValueOnly
+        if ($provided -and $provided -cne $configured) { throw "$field differs from the generated firmware configuration." }
+        Set-Variable -Name $field -Value $configured
+    }
+    $configuredLights = @($metadata.lightIds)
+    if (-not $configuredLights.Count) { throw "device.json has no lightIds" }
+    if ($LightIds -and (($LightIds -join ",") -cne ($configuredLights -join ","))) {
+        throw "LightIds differ from the generated firmware configuration."
+    }
+    $LightIds = $configuredLights
+} elseif (-not $LightIds) {
+    $LightIds = @("light-1", "light-2")
+}
+if (-not $DeviceId -or -not $CampusId -or -not $RoomId) {
+    throw "Provide DeviceId, CampusId and RoomId, or generate a project with device.json."
+}
 if ((Test-Path -LiteralPath $headerPath) -and -not $RotateKey) {
     throw "DeviceLocal.h already exists. Use -RotateKey explicitly to replace its credential."
 }

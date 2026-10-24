@@ -1,6 +1,0 @@
-#pragma once
-
-#define LIGHTING_API_URL "http://host.wokwi.internal:8000"
-#define LIGHTING_DEVICE_KEY "REPLACE_WITH_A_DIFFERENT_RANDOM_KEY_AT_LEAST_32_CHARACTERS"
-#define LIGHTING_ALLOW_LOCAL_HTTP true
-#define LIGHTING_ROOT_CA ""

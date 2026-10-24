@@ -21,6 +21,7 @@ from core.config import CORS_ORIGINS
 from middleware.audit import AuditLogMiddleware
 from middleware.auth import AuthMiddleware
 from app.lighting.router import router as routerLighting, device_router
+from app.cards.router import router as routerCards
 
 app = FastAPI(version="1.0")
 
@@ -43,6 +44,7 @@ for router in (
     routerResources,
     routerLighting,
     device_router,
+    routerCards,
 ):
     app.include_router(router)
 

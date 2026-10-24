@@ -11,6 +11,7 @@ import TimetablePage from '../pages/Timetable/TimetablePage'
 import ProfilePage from '../pages/Profile/ProfilePage'
 import AdminUsersPage from '../pages/AdminUsers/AdminUsersPage'
 import BuildingGeoJSONTest from '../pages/Map3DTest/BuildingGeoJSONTest'
+import CardReaderPage from '../pages/CardReader/CardReaderPage'
 
 export const route = createBrowserRouter([
   { path: '/', element: <RootRedirect /> },
@@ -24,6 +25,7 @@ export const route = createBrowserRouter([
         children: [
           { path: ROUTE_PATHS.dashboard, element: <Dashboard /> },
           { path: ROUTE_PATHS.map, element: <Map /> },
+          { path: ROUTE_PATHS.cardReader, element: <CardReaderPage /> },
           { path: '/map3d-test', element: <BuildingGeoJSONTest /> },
           { path: ROUTE_PATHS.timetable, element: <TimetablePage /> },
           { path: ROUTE_PATHS.profile, element: <ProfilePage /> },

@@ -11,6 +11,7 @@ import { useRoomLighting } from '../../hooks/useRoomLighting'
 import { lightAddress } from '../../services/LightingService'
 import { useAuth } from '../../store/authStore'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
+import { placeRoomLights } from '../../data/roomLighting'
 
 export default function Map() {
   const [dataset, setDataset] = useState<CampusDataset | null>(null)
@@ -70,24 +71,18 @@ function CampusView({ dataset, campusId, onChangeCampus, lighting, canControl }:
     const reportedLights = Object.values(lighting.lights).filter((light) => light.campus_id === campusId)
 
     return campusRooms.map((room) => {
-      const roomLights = reportedLights
-        .filter((light) => light.room_id === room.id)
-        .map((light, index, matches) => {
-          const longitudes = room.polygon.map(([longitude]) => longitude)
-          const longitude = Math.min(...longitudes) +
-            ((index + 1) / (matches.length + 1)) * (Math.max(...longitudes) - Math.min(...longitudes))
-          return {
-            id: light.light_id,
-            name: light.light_id,
-            position: [longitude, room.center[1]] as [number, number],
-          }
-        })
       const configuredIds = new Set(room.lights.map((light) => light.id))
+      const additionalLights = reportedLights.filter(
+        (light) => light.room_id === room.id && !configuredIds.has(light.light_id),
+      )
       return {
         ...room,
         lights: [
           ...room.lights,
-          ...roomLights.filter((light) => !configuredIds.has(light.id)),
+          ...placeRoomLights(
+            additionalLights.map((light) => ({ id: light.light_id, name: light.light_id })),
+            room.polygon,
+          ),
         ],
       }
     })

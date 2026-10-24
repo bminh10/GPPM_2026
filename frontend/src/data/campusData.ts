@@ -1,9 +1,10 @@
 ﻿import { colors } from '../theme/colors'
 import { parseRoomLights, type RoomLight } from './roomLighting'
-import cs1Buildings from './cs1/building.geojson?raw'
-import cs1Rooms from './cs1/room-3d.geojson?raw'
-import cs3Buildings from './cs3/building.geojson?raw'
-import cs3Rooms from './cs3/room-3d.geojson?raw'
+import campusSources from './campusSources.json'
+
+const geoSources = import.meta.glob<string>('./*/{building,room-3d}.geojson', {
+  query: '?raw', import: 'default', eager: true,
+})
 
 export type LngLat = [number, number]
 
@@ -245,10 +246,14 @@ export function parseCampusGeoJSON(collection: { features: unknown[] }): CampusD
 
 /** Nguồn dữ liệu duy nhất: sau này thay bằng gọi API FastAPI trả cùng định dạng GeoJSON. */
 export async function loadCampusDataset(): Promise<CampusDataset> {
-  const campuses = [
-    facilityFeatures('CS1', 'Cơ sở 1 - 97 Võ Văn Tần', cs1Buildings, cs1Rooms),
-    facilityFeatures('CS3', 'Cơ sở 3', cs3Buildings, cs3Rooms),
-  ]
+  const campuses = campusSources.map(({ id, name, directory }) => {
+    const buildingSource = geoSources[`./${directory}/building.geojson`]
+    const roomSource = geoSources[`./${directory}/room-3d.geojson`]
+    if (buildingSource === undefined || roomSource === undefined) {
+      throw new Error(`Cơ sở ${id}: thiếu building.geojson hoặc room-3d.geojson trong ${directory}.`)
+    }
+    return facilityFeatures(id, name, buildingSource, roomSource)
+  })
   return {
     campuses: campuses.flatMap((dataset) => dataset.campuses),
     buildings: campuses.flatMap((dataset) => dataset.buildings),

@@ -4,6 +4,7 @@ import type { MenuProps } from 'antd'
 export const ROUTE_PATHS = {
   dashboard: '/dashboard',
   map: '/map',
+  cardReader: '/card-reader',
   timetable: '/timetable',
   dataManagement: '/admin/data',
   userManagement: '/admin/users',
@@ -16,6 +17,7 @@ export const ROUTE_PATHS = {
 export type AppMenuItem = Required<MenuProps>['items'][number]
 
 export const menuItems: AppMenuItem[] = [
+  { key: ROUTE_PATHS.cardReader, icon: <DatabaseOutlined />, label: 'Đọc thẻ' },
   {
     key: ROUTE_PATHS.dashboard,
     icon: <DashboardOutlined />,

@@ -12,6 +12,7 @@ _IGNORED_POST_PATHS = {
     "/auth/logout",
     "/iot/device/connect",
     "/iot/device/sync",
+    "/iot/card-reader/scans",
 }
 
 

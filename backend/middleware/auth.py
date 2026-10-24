@@ -14,6 +14,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Preflight CORS không mang cookie
         device_endpoint = request.method == "POST" and request.url.path in {
             "/iot/device/connect", "/iot/device/sync",
+            "/iot/card-reader/scans",
         }
         if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS or device_endpoint:
             return await call_next(request)

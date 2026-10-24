@@ -1,8 +1,0 @@
-#pragma once
-
-// Copy to DeviceLocal.h (ignored by Git). Never commit a real device key.
-#define LIGHTING_API_URL "http://host.wokwi.internal:8000"
-#define LIGHTING_DEVICE_KEY "REPLACE_WITH_A_RANDOM_KEY_AT_LEAST_32_CHARACTERS"
-#define LIGHTING_ALLOW_LOCAL_HTTP true
-// For deployment: HTTPS URL, false above, trusted PEM root certificate below.
-#define LIGHTING_ROOT_CA ""

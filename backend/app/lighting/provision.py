@@ -17,6 +17,7 @@ def main() -> None:
     parser.add_argument("--room", required=True)
     parser.add_argument("--light", action="append", required=True)
     parser.add_argument("--key-env", required=True, help="Environment variable containing a random device key")
+    parser.add_argument("--preserve-existing", action="store_true", help="Never rotate existing credentials or reset sessions")
     args = parser.parse_args()
     key = os.environ.get(args.key_env, "")
     if len(key) < 32:
@@ -42,6 +43,14 @@ def main() -> None:
             db.flush()
         elif (device.campus_id, device.room_id) != (args.campus, args.room):
             parser.error("Existing device has a different room; provision a new device ID")
+        elif args.preserve_existing:
+            if device.key_hash != hashlib.sha256(key.encode()).hexdigest():
+                parser.error("Existing device key differs; refusing to rotate credentials")
+            assigned = db.query(RoomLight).filter_by(device_id=device.id).all()
+            if {light.light_id for light in assigned} != set(args.light):
+                parser.error("Existing light assignment differs; refusing to change it")
+            print(f"Verified existing {args.device}; credential, session and history unchanged.")
+            return
         for meter in energy.meters_for_lights(
             db, db.query(RoomLight).filter_by(device_id=device.id).all(),
         ).values():

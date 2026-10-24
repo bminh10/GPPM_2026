@@ -65,6 +65,62 @@ class LightingTests(unittest.TestCase):
     def headers(self, room="a101"):
         return {"X-Device-Id": f"esp32-{room}", "X-Device-Key": KEY}
 
+    def test_card_reader_read_only_transport_validation_and_permissions(self):
+        from app.cards.router import CardScan
+        with SessionLocal.begin() as db:
+            db.add(CardScan(reader_id="test-reader", received_at=0, payload=""))
+        headers = {"X-Reader-Id": "test-reader", "X-Reader-Key": KEY}
+        report = {
+            "uid": "01:02:03:04", "card_type": "MIFARE 1KB", "read_status": "ok",
+            "block": 4, "data_hex": "31323334000000000000000000000000", "detail": "Raw test data",
+        }
+        with patch.dict(os.environ, {"CARD_READER_ID": "test-reader", "CARD_READER_KEY": KEY}):
+            empty = self.client.get("/card-reader/latest")
+            self.assertEqual(empty.status_code, 200)
+            self.assertIsNone(empty.json()["scan"])
+            self.client.cookies.clear()
+            self.assertEqual(self.client.post("/iot/card-reader/scans", headers=headers, json=report).status_code, 200)
+            self.assertEqual(self.client.get("/card-reader/latest").status_code, 401)
+            self.assertEqual(self.client.post("/iot/card-reader/scans", headers={**headers, "X-Reader-Key": "wrong" * 8}, json=report).status_code, 401)
+            self.assertEqual(self.client.post("/iot/card-reader/scans", headers=headers, json={**report, "uid": "01:02:03:04:05"}).status_code, 422)
+            self.assertEqual(self.client.post("/iot/card-reader/scans", headers=headers, json={**report, "data_hex": None}).status_code, 422)
+            self.assertEqual(self.client.post("/iot/card-reader/scans", headers=headers, json={**report, "read_status": "read_error"}).status_code, 422)
+            self.login(2)
+            self.assertEqual(self.client.get("/card-reader/latest").status_code, 403)
+            self.login(1)
+            latest = self.client.get("/card-reader/latest").json()["scan"]
+            self.assertEqual(latest["uid"], report["uid"])
+            self.assertEqual(latest["data_text"], "1234............")
+            self.assertFalse(latest["student_verified"])
+            failed = {**report, "read_status": "read_error", "data_hex": None, "detail": "Authentication failed"}
+            self.assertEqual(self.client.post("/iot/card-reader/scans", headers=headers, json=failed).status_code, 200)
+            self.assertEqual(self.client.get("/card-reader/latest").json()["scan"]["read_status"], "read_error")
+            with SessionLocal() as db:
+                self.assertEqual(db.query(CardScan).count(), 1)
+
+    def test_provision_preserves_existing_credentials_session_and_history(self):
+        from app.lighting.provision import main as provision
+        state = self.sync(self.connect(), 0)
+        arguments = [
+            "provision", "--device", "esp32-a101", "--campus", "nhon-duc", "--room", "A101",
+            "--light", "light-1", "--light", "light-2", "--key-env", "TEST_PROVISION_KEY",
+            "--preserve-existing",
+        ]
+        with SessionLocal() as db:
+            before = db.get(LightingDevice, "esp32-a101")
+            snapshot = (before.key_hash, before.session_id, before.sequence, before.last_seen)
+            intervals = db.query(LightEnergyInterval).count()
+        with patch("sys.argv", arguments), patch.dict(os.environ, {"TEST_PROVISION_KEY": KEY}):
+            provision()
+        with patch("sys.argv", arguments), patch.dict(os.environ, {"TEST_PROVISION_KEY": "wrong-" * 8}):
+            with self.assertRaises(SystemExit):
+                provision()
+        with SessionLocal() as db:
+            after = db.get(LightingDevice, "esp32-a101")
+            self.assertEqual((after.key_hash, after.session_id, after.sequence, after.last_seen), snapshot)
+            self.assertEqual(db.query(LightEnergyInterval).count(), intervals)
+        self.sync(state, 1)
+
     def connect(self, room="a101"):
         response = self.client.post("/iot/device/connect", headers=self.headers(room))
         self.assertEqual(response.status_code, 200, response.text)

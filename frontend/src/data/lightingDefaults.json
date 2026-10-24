@@ -1,0 +1,6 @@
+{
+  "lights": [
+    { "id": "light-1", "name": "Đèn 1", "offset": [0.33, 0.5], "ledPin": 18, "buttonPin": 25 },
+    { "id": "light-2", "name": "Đèn 2", "offset": [0.67, 0.5], "ledPin": 19, "buttonPin": 26 }
+  ]
+}

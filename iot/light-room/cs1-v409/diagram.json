@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "author": "CampusOpt",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-devkit-c-v4",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-led",
+      "id": "light0",
+      "top": -50,
+      "left": 230,
+      "attrs": {
+        "color": "yellow",
+        "label": "V409 - light-1"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r0",
+      "top": 0,
+      "left": 180,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "button0",
+      "top": 0,
+      "left": -150,
+      "attrs": {
+        "color": "green",
+        "label": "Toggle light-1"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "light1",
+      "top": 60,
+      "left": 230,
+      "attrs": {
+        "color": "yellow",
+        "label": "V409 - light-2"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 110,
+      "left": 180,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "button1",
+      "top": 110,
+      "left": -150,
+      "attrs": {
+        "color": "green",
+        "label": "Toggle light-2"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "esp:18",
+      "r0:1",
+      "orange",
+      []
+    ],
+    [
+      "r0:2",
+      "light0:A",
+      "orange",
+      []
+    ],
+    [
+      "light0:C",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "esp:25",
+      "button0:1.l",
+      "green",
+      []
+    ],
+    [
+      "button0:2.l",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "esp:19",
+      "r1:1",
+      "orange",
+      []
+    ],
+    [
+      "r1:2",
+      "light1:A",
+      "orange",
+      []
+    ],
+    [
+      "light1:C",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "esp:26",
+      "button1:1.l",
+      "green",
+      []
+    ],
+    [
+      "button1:2.l",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "esp:TX",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "esp:RX",
+      "$serialMonitor:TX",
+      "",
+      []
+    ]
+  ],
+  "dependencies": {}
+}
