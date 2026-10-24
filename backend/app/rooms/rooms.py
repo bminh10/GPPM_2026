@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from db.database import Campus, PhongHoc, ThoiKhoaBieu, get_db
 from utils.commit import commit_db
+from utils.audit_details import record_update_details
 
 router = APIRouter(prefix="/rooms", tags=["Rooms"])
 
@@ -45,11 +46,8 @@ def require_campus(campus_id: int, db: Session) -> None:
 
 
 @router.get("", response_model=list[RoomResponse])
-def get_rooms(campus_id: int | None = None, db: Session = Depends(get_db)):
-    query = db.query(PhongHoc)
-    if campus_id is not None:
-        query = query.filter(PhongHoc.campus_id == campus_id)
-    return query.order_by(PhongHoc.building, PhongHoc.name).all()
+def get_rooms(db: Session = Depends(get_db)):
+    return db.query(PhongHoc).all()
 
 
 @router.get("/{id}", response_model=RoomResponse)
@@ -71,7 +69,7 @@ def create_room(data: RoomData, db: Session = Depends(get_db)):
 
 
 @router.patch("/{id}", response_model=RoomResponse)
-def update_room(id: int, data: RoomUpdate, db: Session = Depends(get_db)):
+def update_room(id: int, data: RoomUpdate, request: Request, db: Session = Depends(get_db)):
     room = db.query(PhongHoc).filter(PhongHoc.id == id).first()
     if room is None:
         raise HTTPException(
@@ -90,6 +88,7 @@ def update_room(id: int, data: RoomUpdate, db: Session = Depends(get_db)):
         )
     if "campus_id" in update_data and update_data["campus_id"] is not None:
         require_campus(update_data["campus_id"], db)
+    record_update_details(request, "room", room, id, update_data)
     for field, value in update_data.items():
         setattr(room, field, value)
 

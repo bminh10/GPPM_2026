@@ -94,7 +94,13 @@ def get_registrations(
         query = query.filter(DangKyMonHoc.mon_id == mon_id)
     if hoc_ky_id is not None:
         query = query.filter(DangKyMonHoc.hoc_ky_id == hoc_ky_id)
-    return query.order_by(DangKyMonHoc.id).all()
+    return (
+        query.join(Lop, DangKyMonHoc.lop_id == Lop.id)
+        .join(MonHoc, DangKyMonHoc.mon_id == MonHoc.id)
+        .outerjoin(HocKy, DangKyMonHoc.hoc_ky_id == HocKy.id)
+        .order_by(HocKy.start_date.desc(), Lop.name, MonHoc.name)
+        .all()
+    )
 
 
 @router.get("/{registration_id}", response_model=RegistrationResponse)

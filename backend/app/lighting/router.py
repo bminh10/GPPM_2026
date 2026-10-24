@@ -39,7 +39,9 @@ def list_lights(db: Session = Depends(get_db)):
     return [
         service.snapshot(light, device, now)
         for light, device in db.query(RoomLight, LightingDevice)
-        .join(LightingDevice, RoomLight.device_id == LightingDevice.id).all()
+        .join(LightingDevice, RoomLight.device_id == LightingDevice.id)
+        .order_by(RoomLight.campus_id, RoomLight.room_id, RoomLight.light_id)
+        .all()
     ]
 
 

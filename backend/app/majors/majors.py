@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from db.database import Khoa, Lop, Nganh, get_db
 from utils.commit import commit_db
+from utils.audit_details import record_update_details
 
 router = APIRouter(prefix="/majors", tags=["Majors"])
 
@@ -36,7 +37,7 @@ def require_faculty(khoa_id: int | None, db: Session) -> None:
 
 @router.get("", response_model=list[MajorResponse])
 def get_majors(db: Session = Depends(get_db)):
-    return db.query(Nganh).all()
+    return db.query(Nganh).outerjoin(Khoa).order_by(Khoa.name, Nganh.name).all()
 
 
 @router.get("/{id}", response_model=MajorResponse)
@@ -58,7 +59,7 @@ def create_major(data: MajorData, db: Session = Depends(get_db)):
 
 
 @router.patch("/{id}", response_model=MajorResponse)
-def update_major(id: int, data: MajorUpdate, db: Session = Depends(get_db)):
+def update_major(id: int, data: MajorUpdate, request: Request, db: Session = Depends(get_db)):
     major = db.query(Nganh).filter(Nganh.id == id).first()
     if major is None:
         raise HTTPException(
@@ -74,6 +75,7 @@ def update_major(id: int, data: MajorUpdate, db: Session = Depends(get_db)):
         )
     if "khoa_id" in update_data:
         require_faculty(update_data["khoa_id"], db)
+    record_update_details(request, "major", major, id, update_data)
     for field, value in update_data.items():
         setattr(major, field, value)
 

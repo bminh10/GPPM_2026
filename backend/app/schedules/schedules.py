@@ -211,13 +211,18 @@ def get_schedules(
     on_date: date | None = Query(default=None, alias="date"),
     db: Session = Depends(get_db),
 ):
-    query = db.query(ThoiKhoaBieu)
+    query = (
+        db.query(ThoiKhoaBieu)
+        .join(CaHoc, ThoiKhoaBieu.ca_hoc_id == CaHoc.id)
+        .join(PhongHoc, ThoiKhoaBieu.phong_hoc_id == PhongHoc.id)
+        .join(DangKyMonHoc, ThoiKhoaBieu.dang_ky_mon_hoc_id == DangKyMonHoc.id)
+        .join(Lop, DangKyMonHoc.lop_id == Lop.id)
+        .join(MonHoc, DangKyMonHoc.mon_id == MonHoc.id)
+    )
     if semester_id is not None:
         query = query.filter(ThoiKhoaBieu.hoc_ky_id == semester_id)
     if room_id is not None:
         query = query.filter(ThoiKhoaBieu.phong_hoc_id == room_id)
-    if class_id is not None or khoa_id is not None or nganh_id is not None:
-        query = query.join(DangKyMonHoc).join(Lop)
     if class_id is not None:
         query = query.filter(DangKyMonHoc.lop_id == class_id)
     if khoa_id is not None or nganh_id is not None:

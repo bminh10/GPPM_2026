@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
   Alert,
@@ -84,6 +84,26 @@ type ScheduleEditValues = {
 }
 type AutomaticScheduleMode = 'missing' | 'all'
 type AutomaticScheduleScope = 'all' | 'faculty' | 'registrations'
+type UnscheduledRequirement = {
+  label: string
+  meeting_type: string
+  reason: string
+}
+type AutomaticScheduleResult = {
+  message: string
+  solver_status: string
+  relative_gap: number
+  unscheduled_count: number
+  unscheduled_requirements: UnscheduledRequirement[]
+  scheduled_count: number
+  replaced_count: number
+}
+type ScheduleOptimizationJob = {
+  job_id: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  result: AutomaticScheduleResult | null
+  error: string | null
+}
 
 const DAY_NAMES = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']
 const EMPTY_CLASSES: ClassOption[] = []
@@ -173,10 +193,70 @@ export default function TimetablePage() {
   const [confirmScheduleReplacement, setConfirmScheduleReplacement] = useState(false)
   const [automaticScheduleCampusId, setAutomaticScheduleCampusId] = useState<number>()
   const [automaticScheduleError, setAutomaticScheduleError] = useState<string | null>(null)
+  const [automaticScheduleJobId, setAutomaticScheduleJobId] = useState<string | null>(null)
+  const handledOptimizationJobId = useRef<string | null>(null)
   const [editForm] = Form.useForm<ScheduleEditValues>()
   const editingRegistrationId = Form.useWatch('dang_ky_mon_hoc_id', editForm)
   const editingIsPractice = Form.useWatch('is_thuc_hanh', editForm)
   const [messageApi, contextHolder] = message.useMessage()
+  const optimizationJobQuery = useQuery({
+    queryKey: ['optimization', 'schedule-job', automaticScheduleJobId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ScheduleOptimizationJob>(
+        `/optimization/schedule/jobs/${automaticScheduleJobId}`,
+      )
+      return data
+    },
+    enabled: automaticScheduleJobId !== null,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'pending' || query.state.data?.status === 'running'
+        ? 1000
+        : false,
+  })
+  useEffect(() => {
+    const job = optimizationJobQuery.data
+    if (
+      !job ||
+      job.status !== 'completed' ||
+      !job.result ||
+      handledOptimizationJobId.current === job.job_id
+    ) {
+      return
+    }
+
+    handledOptimizationJobId.current = job.job_id
+    void queryClient.invalidateQueries({ queryKey: ['schedules'] })
+    void queryClient.invalidateQueries({ queryKey: ['analytics'] })
+    if (job.result.unscheduled_count === 0) {
+      messageApi.success(job.result.message)
+    }
+  }, [
+    messageApi,
+    optimizationJobQuery.data,
+    optimizationJobQuery.error,
+    optimizationJobQuery.isError,
+    queryClient,
+  ])
+  const displayedAutomaticScheduleError =
+    automaticScheduleError ??
+    (optimizationJobQuery.isError
+      ? getErrorMessage(optimizationJobQuery.error)
+      : optimizationJobQuery.data?.status === 'failed'
+        ? optimizationJobQuery.data.error ??
+          'Đã xảy ra lỗi trong quá trình phân bổ lịch. Vui lòng thử lại.'
+        : null)
+  const automaticScheduleResult =
+    optimizationJobQuery.data?.status === 'completed'
+      ? optimizationJobQuery.data.result
+      : null
+  const automaticScheduleIsRunning =
+    automaticScheduleJobId !== null &&
+    !optimizationJobQuery.isError &&
+    (
+      optimizationJobQuery.data === undefined ||
+      optimizationJobQuery.data.status === 'pending' ||
+      optimizationJobQuery.data.status === 'running'
+    )
 
   const referencesQuery = useQuery({
     queryKey: ['timetable', 'references'],
@@ -396,6 +476,7 @@ export default function TimetablePage() {
       setConfirmScheduleReplacement(false)
       setAutomaticScheduleCampusId(undefined)
       setAutomaticScheduleError(null)
+      setAutomaticScheduleJobId(null)
       setAutomaticScheduleOpen(true)
     } catch (error: unknown) {
       messageApi.error(getErrorMessage(error))
@@ -409,10 +490,7 @@ export default function TimetablePage() {
     setAutomaticScheduleLoading(true)
     setAutomaticScheduleError(null)
     try {
-      const { data } = await apiClient.post<{
-        scheduled_count: number
-        replaced_count: number
-      }>(
+      const { data } = await apiClient.post<Pick<ScheduleOptimizationJob, 'job_id' | 'status'>>(
         '/optimization/schedule',
         {
           hoc_ky_id: selectedSemesterId,
@@ -423,12 +501,7 @@ export default function TimetablePage() {
             : { registration_ids: allScopedRegistrationIds }),
         },
       )
-      messageApi.success(
-        `Đã tạo ${data.scheduled_count} lịch cố định hằng tuần, thay thế ${data.replaced_count} lịch cũ.`,
-      )
-      setAutomaticScheduleOpen(false)
-      void queryClient.invalidateQueries({ queryKey: ['schedules'] })
-      void queryClient.invalidateQueries({ queryKey: ['analytics'] })
+      setAutomaticScheduleJobId(data.job_id)
     } catch (error: unknown) {
       setAutomaticScheduleError(getErrorMessage(error))
     } finally {
@@ -767,28 +840,74 @@ export default function TimetablePage() {
         onCancel={() => {
           setAutomaticScheduleOpen(false)
           setAutomaticScheduleError(null)
+          setAutomaticScheduleJobId(null)
         }}
         onOk={() => void runAutomaticSchedule()}
         okText="Bắt đầu xếp lịch"
         cancelText="Hủy"
-        confirmLoading={automaticScheduleLoading}
+        confirmLoading={
+          automaticScheduleLoading ||
+          automaticScheduleIsRunning
+        }
         okButtonProps={{
           disabled:
             automaticScheduleRegistrations.length === 0 ||
             automaticScheduleCampusId === undefined ||
+            automaticScheduleIsRunning ||
             (automaticScheduleMode === 'all' && !confirmScheduleReplacement),
         }}
         width={640}
         destroyOnHidden
       >
         <Space direction="vertical" size="middle" style={{ display: 'flex' }}>
-          {automaticScheduleError && (
+          {displayedAutomaticScheduleError && (
             <Alert
               type="error"
               showIcon
               message="Không thể hoàn thành phân bổ"
               description={
-                <div style={{ whiteSpace: 'pre-line' }}>{automaticScheduleError}</div>
+                <div style={{ whiteSpace: 'pre-line' }}>{displayedAutomaticScheduleError}</div>
+              }
+            />
+          )}
+          {automaticScheduleIsRunning && (
+            <Alert
+              type="info"
+              showIcon
+              message="Đang tối ưu lịch"
+              description="Tác vụ đang chạy ở chế độ nền. Bạn có thể chờ kết quả tại đây."
+            />
+          )}
+          {automaticScheduleResult && (
+            <Alert
+              type={automaticScheduleResult.unscheduled_count > 0 ? 'warning' : 'success'}
+              showIcon
+              message={automaticScheduleResult.message}
+              description={
+                <div>
+                  <div>
+                    Trạng thái solver: {automaticScheduleResult.solver_status}; khoảng cách tối ưu
+                    phòng: {(automaticScheduleResult.relative_gap * 100).toFixed(1)}%.
+                  </div>
+                  {automaticScheduleResult.unscheduled_count > 0 && (
+                    <>
+                      <ul style={{ marginBottom: 0, paddingInlineStart: 20 }}>
+                        {automaticScheduleResult.unscheduled_requirements
+                          .slice(0, 20)
+                          .map((requirement) => (
+                            <li key={requirement.meeting_type + requirement.label}>
+                              {requirement.label} ({requirement.meeting_type}): {requirement.reason}
+                            </li>
+                          ))}
+                      </ul>
+                      {automaticScheduleResult.unscheduled_count > 20 && (
+                        <div>
+                          Còn {automaticScheduleResult.unscheduled_count - 20} buổi chưa được liệt kê.
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               }
             />
           )}
@@ -802,11 +921,13 @@ export default function TimetablePage() {
                 label: campus.name,
               }))}
               placeholder="Chọn cơ sở"
+              disabled={automaticScheduleIsRunning}
               style={{ width: '100%', marginTop: 6 }}
               onChange={(value: number | undefined) => {
                 setAutomaticScheduleCampusId(value)
                 setConfirmScheduleReplacement(false)
                 setAutomaticScheduleError(null)
+                setAutomaticScheduleJobId(null)
               }}
             />
             {automaticScheduleCampusId !== undefined && (
@@ -820,10 +941,12 @@ export default function TimetablePage() {
             <Typography.Text strong>Phạm vi đăng ký cần phân bổ</Typography.Text>
             <Radio.Group
               value={automaticScheduleScope}
+              disabled={automaticScheduleIsRunning}
               onChange={(event) => {
                 setAutomaticScheduleScope(event.target.value)
                 setConfirmScheduleReplacement(false)
                 setAutomaticScheduleError(null)
+                setAutomaticScheduleJobId(null)
               }}
               style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}
               options={[
@@ -838,6 +961,7 @@ export default function TimetablePage() {
                   mode="multiple"
                   aria-label="Chọn khoa cần phân bổ"
                   placeholder="Chọn một hoặc nhiều khoa"
+                  disabled={automaticScheduleIsRunning}
                   value={automaticScheduleFacultyIds}
                   options={faculties.map((faculty) => ({
                     value: faculty.id,
@@ -847,6 +971,7 @@ export default function TimetablePage() {
                     setAutomaticScheduleFacultyIds(values)
                     setConfirmScheduleReplacement(false)
                     setAutomaticScheduleError(null)
+                    setAutomaticScheduleJobId(null)
                   }}
                   style={{ width: '100%', marginTop: 8 }}
                   optionFilterProp="label"
@@ -863,6 +988,7 @@ export default function TimetablePage() {
                 mode="multiple"
                 aria-label="Chọn đăng ký lớp và môn học"
                 placeholder="Chọn lớp / môn học"
+                disabled={automaticScheduleIsRunning}
                 value={automaticScheduleRegistrationIds}
                 options={semesterRegistrations.map((registration) => {
                   const schoolClass = classes.find((item) => item.id === registration.lop_id)
@@ -878,6 +1004,7 @@ export default function TimetablePage() {
                   setAutomaticScheduleRegistrationIds(values)
                   setConfirmScheduleReplacement(false)
                   setAutomaticScheduleError(null)
+                  setAutomaticScheduleJobId(null)
                 }}
                 style={{ width: '100%', marginTop: 8 }}
                 optionFilterProp="label"
@@ -895,6 +1022,7 @@ export default function TimetablePage() {
           </Typography.Text>
           <Radio.Group
             value={automaticScheduleMode}
+            disabled={automaticScheduleIsRunning}
             optionType="button"
             buttonStyle="solid"
             options={[
@@ -905,6 +1033,7 @@ export default function TimetablePage() {
               setAutomaticScheduleMode(event.target.value)
               setConfirmScheduleReplacement(false)
               setAutomaticScheduleError(null)
+              setAutomaticScheduleJobId(null)
             }}
           />
           {automaticScheduleMode === 'all' && (
@@ -917,6 +1046,7 @@ export default function TimetablePage() {
               />
               <Checkbox
                 checked={confirmScheduleReplacement}
+                disabled={automaticScheduleIsRunning}
                 onChange={(event) => setConfirmScheduleReplacement(event.target.checked)}
               >
                 Tôi xác nhận phân bổ lại các đăng ký trong phạm vi đã chọn
@@ -1302,12 +1432,6 @@ function FragmentRow({
                       GV: {schedule.teacher_name?.trim() || 'Chưa cập nhật'}
                     </Typography.Text>
                     <Flex align="center" justify="space-between" gap={6} style={{ marginTop: 7 }}>
-                      <Tag
-                        color={schedule.is_thuc_hanh ? 'purple' : 'blue'}
-                        style={{ marginInlineEnd: 0, flexShrink: 0 }}
-                      >
-                        {schedule.is_thuc_hanh ? 'Thực hành' : 'Lý thuyết'}
-                      </Tag>
                       <Flex align="center" gap={4} style={{ color: '#64748b', fontSize: 12 }}>
                         <EditOutlined aria-hidden="true" />
                         <span>Chỉnh sửa</span>
