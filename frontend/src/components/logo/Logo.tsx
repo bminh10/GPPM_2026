@@ -8,6 +8,7 @@ export default function Logo({ size = 32 }: { size?: number }) {
             width={size}
             alt="basic"
             src={logo}
+            preview={false}
         />
     );
 }
