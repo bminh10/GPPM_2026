@@ -1,7 +1,8 @@
-from datetime import date
+from datetime import date, time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
@@ -63,6 +64,22 @@ class ScheduleResponse(BaseModel):
     is_thuc_hanh: bool
 
     model_config = {"from_attributes": True}
+
+
+class RoomStatusResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    room_id: int
+    room_name: str
+    campus_id: int
+    room_building: str | None
+    room_capacity: int
+    class_name: str
+    subject_name: str
+    registered_students: int
+    teacher_name: str | None
+    start_time: time
+    end_time: time
 
 
 def _check_schedule_dates(start_date: date, end_date: date) -> None:
@@ -218,6 +235,48 @@ def get_schedules(
             ThoiKhoaBieu.day_of_week == on_date.isoweekday() + 1,
         )
     return query.order_by(ThoiKhoaBieu.day_of_week, ThoiKhoaBieu.ca_hoc_id).all()
+
+
+@router.get("/room-status", response_model=list[RoomStatusResponse])
+def get_room_status(
+    campus_id: int | None = None,
+    on_date: date = Query(alias="date"),
+    semester_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    query = (
+        db.query(
+            PhongHoc.id.label("room_id"),
+            PhongHoc.name.label("room_name"),
+            PhongHoc.campus_id.label("campus_id"),
+            PhongHoc.building.label("room_building"),
+            func.coalesce(PhongHoc.capacity, 0).label("room_capacity"),
+            Lop.name.label("class_name"),
+            MonHoc.name.label("subject_name"),
+            DangKyMonHoc.so_luong.label("registered_students"),
+            ThoiKhoaBieu.teacher_name.label("teacher_name"),
+            CaHoc.start_time.label("start_time"),
+            CaHoc.end_time.label("end_time"),
+        )
+        .join(ThoiKhoaBieu, ThoiKhoaBieu.phong_hoc_id == PhongHoc.id)
+        .join(
+            DangKyMonHoc,
+            DangKyMonHoc.id == ThoiKhoaBieu.dang_ky_mon_hoc_id,
+        )
+        .join(Lop, Lop.id == DangKyMonHoc.lop_id)
+        .join(MonHoc, MonHoc.id == DangKyMonHoc.mon_id)
+        .join(CaHoc, CaHoc.id == ThoiKhoaBieu.ca_hoc_id)
+        .filter(
+            ThoiKhoaBieu.start_date <= on_date,
+            ThoiKhoaBieu.end_date >= on_date,
+            ThoiKhoaBieu.day_of_week == on_date.isoweekday() + 1,
+        )
+    )
+    if campus_id is not None:
+        query = query.filter(PhongHoc.campus_id == campus_id)
+    if semester_id is not None:
+        query = query.filter(ThoiKhoaBieu.hoc_ky_id == semester_id)
+    return query.order_by(CaHoc.start_time, PhongHoc.name, Lop.name).all()
 
 
 @router.get("/{schedule_id}", response_model=ScheduleResponse)

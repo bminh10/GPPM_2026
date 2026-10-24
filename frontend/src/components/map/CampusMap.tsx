@@ -10,6 +10,7 @@ import type { RoomLight } from '../../data/roomLighting'
 import {
   ROOM_STATE_META,
   getRoomState,
+  normalizeRoomCode,
   type Building,
   type Campus,
   type LngLat,
@@ -196,7 +197,7 @@ export default function CampusMap({
 
   const layers = useMemo(() => {
     const primary = colors.primary.DEFAULT
-    const activeRoomNameSet = new Set(activeRoomNames.map((name) => name.toLocaleUpperCase()))
+    const activeRoomNameSet = new Set(activeRoomNames.map(normalizeRoomCode))
     const selectedBuilding: Building | undefined = BUILDINGS.find((b) => b.id === selectedBuildingId)
 
     // Các tòa không được chọn: khối nổi tổng thể
@@ -346,7 +347,7 @@ export default function CampusMap({
         getElevation: roomElevation,
         getFillColor: (r) =>
           hexToRgba(
-            activeRoomNameSet.has(r.code.toLocaleUpperCase())
+            activeRoomNameSet.has(normalizeRoomCode(r.code))
               ? '#1677ff'
               : ROOM_STATE_META[getRoomState(r)].color,
             r.id === selectedRoomId ? 255 : 215,
@@ -371,7 +372,7 @@ export default function CampusMap({
         getPolygon: (r) => withZ(r.polygon, floorBase + 0.05),
         getFillColor: (r) =>
           hexToRgba(
-            activeRoomNameSet.has(r.code.toLocaleUpperCase())
+            activeRoomNameSet.has(normalizeRoomCode(r.code))
               ? '#1677ff'
               : ROOM_STATE_META[getRoomState(r)].color,
             130,

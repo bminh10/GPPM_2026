@@ -45,8 +45,11 @@ def require_campus(campus_id: int, db: Session) -> None:
 
 
 @router.get("", response_model=list[RoomResponse])
-def get_rooms(db: Session = Depends(get_db)):
-    return db.query(PhongHoc).all()
+def get_rooms(campus_id: int | None = None, db: Session = Depends(get_db)):
+    query = db.query(PhongHoc)
+    if campus_id is not None:
+        query = query.filter(PhongHoc.campus_id == campus_id)
+    return query.order_by(PhongHoc.building, PhongHoc.name).all()
 
 
 @router.get("/{id}", response_model=RoomResponse)
