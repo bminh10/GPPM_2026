@@ -19,13 +19,13 @@ export const ROUTE_PATHS = {
 export type AppMenuItem = Required<MenuProps>['items'][number]
 
 export const menuItems: AppMenuItem[] = [
-  { key: ROUTE_PATHS.cardReader, icon: <DatabaseOutlined />, label: 'Đọc thẻ' },
-  { key: ROUTE_PATHS.cardWriter, icon: <DatabaseOutlined />, label: 'Cấp thẻ' },
   {
     key: ROUTE_PATHS.dashboard,
     icon: <DashboardOutlined />,
     label: 'Tổng quan',
   },
+  { key: ROUTE_PATHS.cardReader, icon: <DatabaseOutlined />, label: 'Đọc thẻ' },
+  { key: ROUTE_PATHS.cardWriter, icon: <DatabaseOutlined />, label: 'Cấp thẻ' },
   {
     key: ROUTE_PATHS.map,
     icon: <EnvironmentOutlined />,
