@@ -17,7 +17,6 @@ import {
   Space,
   Spin,
   Switch,
-  Table,
   TimePicker,
   Typography,
   Upload,
@@ -29,7 +28,10 @@ import type { UploadFile } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
+import { useAuth } from '../../store/authStore'
+import { getAppRole } from '../../routes/roleAccess'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 import SearchableTable from '../../components/common/SearchableTable'
 import { csvTemplate, parseCsv } from './csvUtils'
@@ -41,21 +43,6 @@ type EntityRecord = Record<string, unknown> & { id: number }
 type OptionRecord = { id: number; name: string }
 type CsvRow = { line: number; values: FormValues; error?: string }
 type CsvImportFailure = { line: number; message: string }
-type AuditChange = { label: string; before: unknown; after: unknown }
-type AuditDetails = {
-  entity: string
-  record_id: number
-  record_name: string
-  changes: Record<string, AuditChange>
-}
-type AuditLogRecord = {
-  id: number
-  method: string
-  path: string
-  status_code: number
-  details: AuditDetails | null
-  created_at: string
-}
 
 function getRecordName(record: EntityRecord) {
   return String(record.name ?? record.code ?? `#${record.id}`)
@@ -72,7 +59,6 @@ type EntityConfig = {
   csvSample: string[]
   requiredCsvColumns: string[]
   readOnly?: boolean
-  auditPathPrefix?: string
   csvReferences?: { column: string; payloadField: string }[]
   columns: { key: string; title: string }[]
 }
@@ -82,7 +68,6 @@ const entities: EntityConfig[] = [
     key: 'campus',
     label: 'Cơ sở (Campus)',
     readOnly: true,
-    auditPathPrefix: '/campus/',
     endpoint: '/campus/all',
     createEndpoint: '/campus/create',
     updateEndpoint: '/campus',
@@ -96,7 +81,6 @@ const entities: EntityConfig[] = [
     key: 'faculty',
     label: 'Khoa',
     readOnly: true,
-    auditPathPrefix: '/faculties/',
     endpoint: '/faculties',
     createEndpoint: '/faculties',
     updateEndpoint: '/faculties',
@@ -110,7 +94,6 @@ const entities: EntityConfig[] = [
     key: 'major',
     label: 'Ngành',
     readOnly: true,
-    auditPathPrefix: '/majors/',
     endpoint: '/majors',
     createEndpoint: '/majors',
     updateEndpoint: '/majors',
@@ -142,7 +125,6 @@ const entities: EntityConfig[] = [
     key: 'room',
     label: 'Phòng học',
     readOnly: true,
-    auditPathPrefix: '/rooms/',
     endpoint: '/rooms',
     createEndpoint: '/rooms',
     updateEndpoint: '/rooms',
@@ -455,14 +437,16 @@ function EntityFields({
 }
 
 export default function AdminDataPage() {
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const canDelete = ['super_admin', 'staff'].includes(getAppRole(user?.role))
   const [selectedKey, setSelectedKey] = useState<EntityKey>('campus')
   const [records, setRecords] = useState<EntityRecord[]>([])
-  const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([])
   const [faculties, setFaculties] = useState<OptionRecord[]>(emptyOptions)
   const [majors, setMajors] = useState<OptionRecord[]>(emptyOptions)
   const [campuses, setCampuses] = useState<OptionRecord[]>(emptyOptions)
   const [loading, setLoading] = useState(true)
-  const [auditLoading, setAuditLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const [csvFileList, setCsvFileList] = useState<UploadFile[]>([])
@@ -474,7 +458,6 @@ export default function AdminDataPage() {
   const [csvCreatedCount, setCsvCreatedCount] = useState<number | null>(null)
   const [editingRecord, setEditingRecord] = useState<EntityRecord | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [auditError, setAuditError] = useState<string | null>(null)
   const [optionsError, setOptionsError] = useState<string | null>(null)
   const [messageApi, contextHolder] = message.useMessage()
   const entity = entities.find((item) => item.key === selectedKey) ?? entities[0]
@@ -498,34 +481,8 @@ export default function AdminDataPage() {
     }
   }, [entity.endpoint, selectedKey])
 
-  const fetchAuditLogs = useCallback(async () => {
-    if (!entity.readOnly || !entity.auditPathPrefix) return []
-    const { data } = await apiClient.get<AuditLogRecord[]>('/audit-logs', {
-      params: { limit: 100, path_prefix: entity.auditPathPrefix },
-    })
-    return data.filter(
-      (log) =>
-        log.method === 'PATCH' &&
-        log.status_code >= 200 &&
-        log.status_code < 300 &&
-        log.details !== null,
-    )
-  }, [entity.auditPathPrefix, entity.readOnly])
-
-  const refreshAuditLogs = useCallback(async () => {
-    setAuditLoading(true)
-    try {
-      setAuditLogs(await fetchAuditLogs())
-      setAuditError(null)
-    } catch (error: unknown) {
-      setAuditError(getErrorMessage(error))
-    } finally {
-      setAuditLoading(false)
-    }
-  }, [fetchAuditLogs])
-
   const handleDelete = useCallback(async (record: EntityRecord) => {
-    if (entity.readOnly) return
+    if (entity.readOnly || !canDelete) return
     try {
       await apiClient.delete(`${entity.deleteEndpoint}/${record.id}`)
       messageApi.success(`Đã xóa ${entity.label.toLowerCase()}`)
@@ -533,10 +490,10 @@ export default function AdminDataPage() {
     } catch (error: unknown) {
       messageApi.error(getErrorMessage(error))
     }
-  }, [entity, loadRecords, messageApi])
+  }, [canDelete, entity, loadRecords, messageApi])
 
   const handleBulkDelete = useCallback(async (selectedRecords: EntityRecord[]) => {
-    if (entity.readOnly) return []
+    if (entity.readOnly || !canDelete) return []
     const deletedIds: number[] = []
     const failures: string[] = []
     for (const record of selectedRecords) {
@@ -557,7 +514,7 @@ export default function AdminDataPage() {
       messageApi.success(`Đã xóa ${deletedIds.length} ${entity.label.toLowerCase()}`)
     }
     return deletedIds
-  }, [entity, loadRecords, messageApi])
+  }, [canDelete, entity, loadRecords, messageApi])
 
   useEffect(() => {
     let active = true
@@ -577,22 +534,6 @@ export default function AdminDataPage() {
       }
     }
     void loadSelectedRecords()
-    if (entity.readOnly) {
-      void fetchAuditLogs()
-        .then((data) => {
-          if (active) {
-            setAuditLogs(data)
-            setAuditError(null)
-          }
-        })
-        .catch((error: unknown) => {
-          if (active) setAuditError(getErrorMessage(error))
-        })
-        .finally(() => {
-          if (active) setAuditLoading(false)
-        })
-    }
-
     const optionsRequest =
       selectedKey === 'major'
         ? apiClient.get<OptionRecord[]>('/faculties').then(({ data }) => {
@@ -614,7 +555,7 @@ export default function AdminDataPage() {
     return () => {
       active = false
     }
-  }, [entity.endpoint, entity.readOnly, fetchAuditLogs, selectedKey])
+  }, [entity.endpoint, selectedKey])
 
   const columns = useMemo<ColumnsType<EntityRecord>>(
     () => [
@@ -666,7 +607,7 @@ export default function AdminDataPage() {
             >
               Sửa
             </Button>
-            {!entity.readOnly && (
+            {!entity.readOnly && canDelete && (
               <Popconfirm
                 title={`Xóa ${entity.label.toLowerCase()}?`}
                 description="Thao tác này không thể hoàn tác."
@@ -682,7 +623,7 @@ export default function AdminDataPage() {
         ),
       },
     ],
-    [campuses, editForm, entity, faculties, handleDelete, majors, selectedKey],
+    [canDelete, campuses, editForm, entity, faculties, handleDelete, majors, selectedKey],
   )
 
   const handleCreate = async (values: FormValues) => {
@@ -712,7 +653,6 @@ export default function AdminDataPage() {
       setEditingRecord(null)
       editForm.resetFields()
       await loadRecords()
-      await refreshAuditLogs()
     } catch (error: unknown) {
       messageApi.error(getErrorMessage(error))
     } finally {
@@ -796,48 +736,6 @@ export default function AdminDataPage() {
     credits: 3,
   }
 
-  const formatAuditValue = (field: string, value: unknown) => {
-    if (typeof value === 'boolean') return value ? 'Có' : 'Không'
-    if (value === null || value === undefined || value === '') return '—'
-    if (typeof value === 'number' && field === 'campus_id') {
-      return campuses.find((item) => item.id === value)?.name ?? `#${value}`
-    }
-    if (typeof value === 'number' && field === 'khoa_id') {
-      return faculties.find((item) => item.id === value)?.name ?? `#${value}`
-    }
-    return String(value)
-  }
-
-  const auditColumns: ColumnsType<AuditLogRecord> = [
-    {
-      title: 'Thời gian',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 170,
-      render: (value: string) => dayjs(value).format('DD/MM/YYYY HH:mm:ss'),
-    },
-    {
-      title: 'Bản ghi',
-      key: 'record',
-      width: 180,
-      render: (_, log) => `${log.details?.record_name ?? '—'} (#${log.details?.record_id ?? '—'})`,
-    },
-    {
-      title: 'Nội dung thay đổi',
-      key: 'changes',
-      render: (_, log) => (
-        <Space direction="vertical" size={2}>
-          {Object.entries(log.details?.changes ?? {}).map(([field, change]) => (
-            <Typography.Text key={field}>
-              <strong>{change.label}:</strong>{' '}
-              {formatAuditValue(field, change.before)} → {formatAuditValue(field, change.after)}
-            </Typography.Text>
-          ))}
-        </Space>
-      ),
-    },
-  ]
-
   return (
     <Space direction="vertical" size="large" style={{ display: 'flex' }}>
       {contextHolder}
@@ -849,6 +747,10 @@ export default function AdminDataPage() {
       </div>
 
       <Tabs
+        activeKey={pathname === '/admin/registrations' ? 'course-registrations' : 'entities'}
+        onChange={(key) => navigate(
+          key === 'course-registrations' ? '/admin/registrations' : '/admin/data',
+        )}
         items={[
           {
             key: 'entities',
@@ -859,15 +761,13 @@ export default function AdminDataPage() {
         <Space direction="vertical" size={16} style={{ display: 'flex' }}>
           <Typography.Title level={5} style={{ margin: 0 }}>Chọn loại dữ liệu</Typography.Title>
           <SearchFilterSelect
+            id="data-entity-selector"
             value={selectedKey}
             disabled={csvImporting}
             onChange={(value: EntityKey) => {
               setLoadError(null)
-              setAuditError(null)
               setOptionsError(null)
               setRecords([])
-              setAuditLogs([])
-              setAuditLoading(Boolean(entities.find((item) => item.key === value)?.readOnly))
               setLoading(true)
               setEditingRecord(null)
               setCsvFile(null)
@@ -886,11 +786,11 @@ export default function AdminDataPage() {
         </Space>
       </Card>
 
-      <Row gutter={[16, 16]} align="top">
+      <Row id="data-actions" gutter={[16, 16]} align="top">
         {!entity.readOnly && (
         <Col xs={24} xl={9}>
           <Space direction="vertical" size={16} style={{ display: 'flex' }}>
-            <Card title={`Tạo ${entity.label.toLowerCase()}`}>
+            <Card id="data-create-form" title={`Tạo ${entity.label.toLowerCase()}`}>
               {optionsError && <Alert type="error" showIcon message={optionsError} style={{ marginBottom: 16 }} />}
               <Form
                 key={selectedKey}
@@ -911,6 +811,7 @@ export default function AdminDataPage() {
               </Form>
             </Card>
             <Card
+              id="data-csv-import"
               title="Tạo hàng loạt từ CSV"
               extra={
                 <Button icon={<DownloadOutlined />} onClick={downloadCsvTemplate}>
@@ -1001,8 +902,8 @@ export default function AdminDataPage() {
         )}
         <Col xs={24} xl={entity.readOnly ? 24 : 15}>
           <Card
+            id="data-record-list"
             title={`Danh sách ${entity.label.toLowerCase()}`}
-            extra={<Button onClick={() => void loadRecords()} loading={loading}>Tải lại</Button>}
           >
             {loadError ? (
               <Alert type="error" showIcon message={loadError} />
@@ -1031,7 +932,7 @@ export default function AdminDataPage() {
                   })
                   return values.join(' ')
                 }}
-                onBulkDelete={entity.readOnly ? undefined : handleBulkDelete}
+                onBulkDelete={entity.readOnly || !canDelete ? undefined : handleBulkDelete}
                 emptyText="Không tìm thấy dữ liệu"
                 pagination={{ pageSize: 8, showSizeChanger: false }}
               />
@@ -1039,36 +940,6 @@ export default function AdminDataPage() {
           </Card>
         </Col>
       </Row>
-      {/* {entity.readOnly && (
-        <Card
-          title="Nhật ký chỉnh sửa"
-          extra={
-            <Button
-              onClick={() => {
-                void refreshAuditLogs()
-              }}
-              loading={auditLoading}
-            >
-              Tải lại
-            </Button>
-          }
-        >
-          {auditError ? (
-            <Alert type="error" showIcon message={auditError} />
-          ) : (
-            <Table<AuditLogRecord>
-              rowKey="id"
-              size="small"
-              loading={auditLoading}
-              columns={auditColumns}
-              dataSource={auditLogs}
-              pagination={{ pageSize: 5, showSizeChanger: false }}
-              locale={{ emptyText: 'Chưa có lịch sử chỉnh sửa' }}
-              scroll={{ x: true }}
-            />
-          )}
-        </Card>
-      )} */}
       <Modal
         title={`Sửa ${entity.label.toLowerCase()}`}
         open={editingRecord !== null}

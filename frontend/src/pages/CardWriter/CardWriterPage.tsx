@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Card, Checkbox, Descriptions, Flex, Input, Tag, Typography } from 'antd'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
-import { useAuth } from '../../store/authStore'
 
 type Job = {
   id: string; uid: string; mssv: string; state: string; detail: string; created_at: number
@@ -21,10 +20,6 @@ const states: Record<string, string> = {
 }
 
 export default function CardWriterPage() {
-  const { user } = useAuth()
-  if (!['admin', 'superadmin'].includes(user?.role?.replace(/\s/g, '').toLowerCase() ?? '')) {
-    return <Alert type="error" showIcon title="Chỉ quản trị viên được cấp thẻ" />
-  }
   return <App><WriterStationPage /></App>
 }
 
@@ -78,10 +73,10 @@ function WriterStationPage() {
   return (
     <Flex vertical gap={16}>
       <Typography.Title level={3}>Cấp thẻ · Ghi MSSV</Typography.Title>
-      <Alert type="warning" showIcon title="Chỉ quản trị · Chỉ thẻ trắng/thẻ mẫu được phép ghi"
+      <Alert type="warning" showIcon title="Chỉ nhân sự được phân quyền · Chỉ thẻ trắng/thẻ mẫu được phép ghi"
         description="Chưa đối chiếu danh sách sinh viên, chưa xác minh hoặc điểm danh. RC522 sẽ kiểm tra loại thẻ và khối 4 trước khi ghi. Không dùng thẻ trường có dữ liệu sẵn." />
       {query.error && <Alert type="error" showIcon title="Không kết nối được API trạm ghi" description={getErrorMessage(query.error)} />}
-      <Card title="1. Chạm thẻ lên trạm ghi để xem UID">
+      <Card id="writer-card-status" title="1. Chạm thẻ lên trạm ghi để xem UID">
         <Tag color={!query.error && data?.online ? 'green' : 'default'}>
           {!query.error && data?.online ? 'Writer đang liên lạc' : 'Chưa có kết nối writer được xác nhận'}
         </Tag>
@@ -92,16 +87,16 @@ function WriterStationPage() {
           { key: 'time', label: 'Nhận diện lúc', children: data?.seen_at ? new Date(data.seen_at * 1000).toLocaleString('vi-VN') : 'Chưa có' },
         ]} />
       </Card>
-      <Card title="2. Nhập MSSV, xác nhận rồi chạm lại đúng thẻ">
+      <Card id="writer-authorization-form" title="2. Nhập MSSV, xác nhận rồi chạm lại đúng thẻ">
         <Flex vertical gap={12}>
           <Typography.Text>MSSV gồm 10 chữ số, bắt đầu bằng 245101. Không tự tăng số hay gán sinh viên.</Typography.Text>
-          <Input aria-label="MSSV cần ghi" placeholder="245101xxxx" maxLength={10}
+          <Input id="writer-mssv-input" aria-label="MSSV cần ghi" placeholder="245101xxxx" maxLength={10}
             value={mssv} onChange={(event) => setMssv(event.target.value)}
             disabled={busy || mutation.isPending} style={{ maxWidth: 320 }} />
           {mssv && !/^245101[0-9]{4}$/.test(mssv) && <Typography.Text type="danger">
             MSSV chưa hợp lệ: nhập đủ 10 chữ số, bắt đầu bằng 245101, ví dụ 2451010001.
           </Typography.Text>}
-          <Checkbox checked={!!data?.uid && consentUid === data.uid}
+          <Checkbox id="writer-card-confirmation" checked={!!data?.uid && consentUid === data.uid}
             disabled={!data?.uid || busy || mutation.isPending}
             onChange={(event) => setConsentUid(event.target.checked ? data?.uid ?? null : null)}>
             Tôi xác nhận thẻ UID đang hiển thị là thẻ của tôi và cho phép thay nội dung khối 4.
@@ -109,13 +104,13 @@ function WriterStationPage() {
           {!data?.uid && <Alert type="info" showIcon title="Chưa thể xác nhận: hệ thống chưa nhận được UID thẻ"
             description="Cấu hình Wi-Fi và địa chỉ backend cho writer, nạp lại firmware rồi chạm thẻ lên RC522. Khi UID xuất hiện ở bước 1, ô xác nhận mới được mở." />}
           {!freshCard && <Typography.Text type="secondary">Nhấc thẻ rồi chạm lại để lấy UID mới (có hiệu lực 60 giây).</Typography.Text>}
-          <Button type="primary" onClick={authorize} loading={mutation.isPending}
+          <Button id="writer-authorize" type="primary" onClick={authorize} loading={mutation.isPending}
             disabled={!!query.error || !data?.online || !freshCard || busy || consentUid !== data?.uid || !/^245101[0-9]{4}$/.test(mssv)}>
             Xác nhận MSSV và ủy quyền ghi
           </Button>
         </Flex>
       </Card>
-      {job && <Card title="Kết quả lệnh ghi gần nhất">
+      {job && <Card id="writer-job-result" title="Kết quả lệnh ghi gần nhất">
         <Flex vertical gap={8}>
           <Typography.Text strong>{states[job.state] ?? job.state}</Typography.Text>
           <Typography.Text>MSSV: {job.mssv} · UID: {job.uid}</Typography.Text>

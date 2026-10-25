@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
-from app.auth.dependencies import require_admin
+from app.auth.dependencies import require_infrastructure_user
 from app.cards.attendance import AttendanceStation, record_scan, station as attendance_station
 from db.database import Base, engine, get_db
 
@@ -87,7 +87,7 @@ def receive_scan(
     return {"received": True, "read_status": report.read_status, "mssv": read_mssv(report), "attendance": attendance}
 
 
-@router.get("/card-reader/latest", dependencies=[Depends(require_admin)])
+@router.get("/card-reader/latest", dependencies=[Depends(require_infrastructure_user)])
 def latest_scan(db: Session = Depends(get_db)):
     reader_id = os.getenv("CARD_READER_ID", "card-reader-01")
     scan = db.query(CardScan).filter_by(reader_id=reader_id).with_for_update().first()

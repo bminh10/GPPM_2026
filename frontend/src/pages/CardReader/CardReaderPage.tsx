@@ -55,7 +55,7 @@ export default function CardReaderPage() {
         description="Chỉ thêm log điểm danh khi có phiên đang mở tại cơ sở. Không ghi hoặc thay đổi thẻ. Dấu chấm trong bản xem ASCII đại diện byte không in được." />
       <AttendancePanel />
       {error && <Alert showIcon type="error" title="Không tải được dữ liệu đầu đọc" description={error} />}
-      <Card title={data ? `Trạm ${data.reader_id}` : 'Đang kết nối API'}>
+      <Card id="reader-latest-scan" title={data ? `Trạm ${data.reader_id}` : 'Đang kết nối API'}>
         {!scan ? (
           <Typography.Paragraph>Chưa nhận được lần quét nào. Vui lòng mở đầu đọc và chạm thẻ.</Typography.Paragraph>
         ) : (
@@ -66,7 +66,7 @@ export default function CardReaderPage() {
               description={scan.attendance.campus_name
                 ? `Cơ sở: ${scan.attendance.campus_name}. Kết quả của lần quét gần nhất, không phải trạng thái phiên hiện tại.`
                 : 'Chưa có phiên điểm danh. Đây là kết quả của lần quét gần nhất.'} />}
-            <Card size="small" title="Mã số sinh viên trên thẻ">
+            <Card id="reader-scan-mssv" size="small" title="Mã số sinh viên trên thẻ">
               {scan.mssv ? (
                 <Typography.Title level={2} style={{ margin: 0 }}>
                   <Typography.Text copyable>{scan.mssv}</Typography.Text>

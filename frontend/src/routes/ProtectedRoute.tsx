@@ -5,6 +5,7 @@ import { Spin } from 'antd'
 import { restoreSession } from '../services/AuthService'
 import { useAuth } from '../store/authStore'
 import { ROUTE_PATHS } from './menuConfig'
+import { getAppRole, getLandingPath, type AppRole } from './roleAccess'
 
 function useSessionGate() {
   const { status } = useAuth()
@@ -35,12 +36,35 @@ export function AdminRoute() {
 
 export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   const status = useSessionGate()
+  const { user } = useAuth()
   if (status === 'loading') return <FullPageSpin />
-  return status === 'authenticated' ? <Navigate to={ROUTE_PATHS.dashboard} replace /> : <>{children}</>
+  return status === 'authenticated'
+    ? <Navigate to={getLandingPath(user?.role)} replace />
+    : <>{children}</>
 }
 
 export function RootRedirect() {
   const status = useSessionGate()
+  const { user } = useAuth()
   if (status === 'loading') return <FullPageSpin />
-  return <Navigate to={status === 'authenticated' ? ROUTE_PATHS.dashboard : ROUTE_PATHS.signIn} replace />
+  return (
+    <Navigate
+      to={status === 'authenticated' ? getLandingPath(user?.role) : ROUTE_PATHS.signIn}
+      replace
+    />
+  )
+}
+
+export function RoleRoute({
+  roles,
+  children,
+}: {
+  roles: AppRole[]
+  children: ReactNode
+}) {
+  const { status, user } = useAuth()
+  const role = getAppRole(user?.role)
+  if (status !== 'authenticated' || !user) return <Navigate to={ROUTE_PATHS.signIn} replace />
+  if (!roles.includes(role)) return <Navigate to={getLandingPath(user.role)} replace />
+  return <>{children}</>
 }

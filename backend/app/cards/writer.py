@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import Float, Integer, String
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
-from app.auth.dependencies import require_admin
+from app.auth.dependencies import require_infrastructure_user
 from db.database import Base, User, engine, get_db
 
 
@@ -111,7 +111,7 @@ def job_view(job: WriteJob | None):
     }
 
 
-@router.get("/card-writer", dependencies=[Depends(require_admin)])
+@router.get("/card-writer", dependencies=[Depends(require_infrastructure_user)])
 def writer_status(db: Session = Depends(get_db)):
     row = station(db, os.getenv("CARD_WRITER_ID", "card-writer-01"))
     job = current_job(db, row)
@@ -126,7 +126,7 @@ def writer_status(db: Session = Depends(get_db)):
 
 
 @router.post("/card-writer/jobs")
-def create_write(data: CreateWrite, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def create_write(data: CreateWrite, admin: User = Depends(require_infrastructure_user), db: Session = Depends(get_db)):
     row = station(db, os.getenv("CARD_WRITER_ID", "card-writer-01"))
     job = current_job(db, row)
     if job and job.state in ("pending", "writing"):
@@ -144,7 +144,7 @@ def create_write(data: CreateWrite, admin: User = Depends(require_admin), db: Se
 
 
 @router.post("/card-writer/jobs/{job_id}/close")
-def close_write(job_id: str, data: CloseWrite, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def close_write(job_id: str, data: CloseWrite, admin: User = Depends(require_infrastructure_user), db: Session = Depends(get_db)):
     row = station(db, os.getenv("CARD_WRITER_ID", "card-writer-01"))
     job = current_job(db, row)
     if not job or job.id != job_id:

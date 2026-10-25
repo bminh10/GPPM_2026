@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from core.config import PUBLIC_PATHS
+from core.permissions import is_request_allowed
 from core.session import read_user_id
 from db.database import SessionLocal, User
 
@@ -35,7 +36,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     status_code=401,
                     content={"detail": "Tài khoản không tồn tại hoặc đã bị vô hiệu hóa"},
                 )
+            role_name = user.role.name if user.role is not None else None
         finally:
             db.close()
+        if not is_request_allowed(role_name, request.method, request.url.path):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Bạn không có quyền thực hiện thao tác này"},
+            )
         request.state.user_id = user_id
+        request.state.role_name = role_name
         return await call_next(request)

@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Card, Flex, Input, Spin, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Flex, Input, Spin, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import CampusMap, { type MapFocus } from '../../components/map/CampusMap'
 import BuildingSelector from '../../components/map/BuildingSelector'
@@ -17,6 +17,7 @@ import {
 import { useRoomLighting } from '../../hooks/useRoomLighting'
 import { lightAddress } from '../../services/LightingService'
 import { useAuth } from '../../store/authStore'
+import { getAppRole } from '../../routes/roleAccess'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 import { placeRoomLights } from '../../data/roomLighting'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
@@ -81,7 +82,7 @@ export default function Map() {
   const [referenceError, setReferenceError] = useState<string | null>(null)
   const lighting = useRoomLighting()
   const { user } = useAuth()
-  const canControl = ['admin', 'superadmin'].includes(user?.role?.replace(/\s/g, '').toLowerCase() ?? '')
+  const canControl = ['admin', 'super_admin', 'technician'].includes(getAppRole(user?.role))
 
   useEffect(() => {
     loadCampusDataset().then((d) => {
@@ -123,8 +124,7 @@ export default function Map() {
       {referenceError && (
         <Alert type="error" showIcon title="Không tải được dữ liệu cơ sở" description={referenceError} />
       )}
-      <Alert type="info" showIcon title="Đèn IoT mô phỏng · Trạng thái chỉ được xác nhận sau khi ESP32 báo về. Thiết bị cần chạy Wokwi." />
-      <Card size="small">
+      <Card id="map-date-filters" size="small">
         <Flex align="center" justify="space-between" gap={16} wrap>
           <Flex align="center" gap={8}>
             <Typography.Text strong>Học kỳ:</Typography.Text>
@@ -155,12 +155,6 @@ export default function Map() {
               style={{ width: 180 }}
             />
             <Button onClick={() => setSelectedDate(localDate(new Date()))}>Hôm nay</Button>
-          </Flex>
-          <Flex align="center" gap={8}>
-            <Tag color="#1677ff">Có lịch trong ngày</Tag>
-            <Typography.Text type="secondary">
-              Lịch phòng theo ngày đã chọn · tự cập nhật mỗi 30 giây
-            </Typography.Text>
           </Flex>
         </Flex>
       </Card>
@@ -487,6 +481,7 @@ function CampusView({
       </Flex>
 
       <Flex
+        id="map-navigation"
         vertical
         gap={12}
         style={{ position: 'absolute', top: 16, left: 16, bottom: 16, width: 300, zIndex: 2 }}
@@ -503,14 +498,18 @@ function CampusView({
             />
           </Card>
         )}
-        <BuildingSelector buildings={buildings} value={buildingId} onChange={selectBuilding} onReset={selectNone} />
-        <RoomListPanel
-          rooms={rooms}
-          buildings={buildings}
-          scheduledRoomNames={scheduledRoomNames}
-          selectedRoomId={roomId}
-          onSelectRoom={selectRoom}
-        />
+        <div id="map-building-selector">
+          <BuildingSelector buildings={buildings} value={buildingId} onChange={selectBuilding} onReset={selectNone} />
+        </div>
+        <div id="map-room-list">
+          <RoomListPanel
+            rooms={rooms}
+            buildings={buildings}
+            scheduledRoomNames={scheduledRoomNames}
+            selectedRoomId={roomId}
+            onSelectRoom={selectRoom}
+          />
+        </div>
       </Flex>
 
       {building && (
@@ -520,7 +519,7 @@ function CampusView({
       )}
 
       {selectedRoom && (
-        <Flex style={{ position: 'absolute', right: 84, bottom: 16, width: 350, maxHeight: 'calc(100% - 32px)', overflowY: 'auto', zIndex: 2 }}>
+        <Flex id="map-room-details" style={{ position: 'absolute', right: 84, bottom: 16, width: 350, maxHeight: 'calc(100% - 32px)', overflowY: 'auto', zIndex: 2 }}>
           <RoomDetailCard
             room={selectedRoom}
             buildingName={building?.name ?? ''}

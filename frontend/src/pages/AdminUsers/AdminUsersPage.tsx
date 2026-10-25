@@ -285,11 +285,12 @@ export default function AdminUsersPage() {
       </div>
 
       <Card
+        id="users-list"
         title="Tài khoản hiện có"
         extra={
           <Space>
-            <Button onClick={() => void loadUsers()} loading={loading}>Tải lại</Button>
             <Button
+              id="users-create-button"
               type="primary"
               icon={<UserAddOutlined />}
               onClick={() => setCreateOpen(true)}

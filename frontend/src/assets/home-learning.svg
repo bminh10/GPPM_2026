@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="290" y1="0" x2="1320" y2="600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#303F77"/>
+      <stop offset="1" stop-color="#6A9CC0"/>
+    </linearGradient>
+    <linearGradient id="room" x1="800" y1="164" x2="800" y2="540" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF9EC"/>
+      <stop offset="1" stop-color="#D2E2E8"/>
+    </linearGradient>
+    <linearGradient id="desk" x1="800" y1="350" x2="800" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B98256"/>
+      <stop offset="1" stop-color="#704C42"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#bg)" d="M0 0h1600v600H0z"/>
+  <circle cx="132" cy="115" r="80" fill="#FDE68A" fill-opacity=".14"/>
+  <circle cx="1405" cy="432" r="178" fill="#B6E6E0" fill-opacity=".12"/>
+  <path d="M301 600V144l499-85 499 85v456H301Z" fill="url(#room)"/>
+  <path d="M302 144 800 59l499 85" stroke="#fff" stroke-opacity=".72" stroke-width="12"/>
+  <path d="M386 198h311v165H386z" fill="#83B7CE"/>
+  <path d="M409 220h265v121H409z" fill="#D6F2F3"/>
+  <path d="M542 220v121m-133-60h265" stroke="#F8FCFF" stroke-width="9"/>
+  <path d="M901 189h304v17H901zm0 38h304v17H901zm0 38h304v17H901z" fill="#91A5B1"/>
+  <path d="M752 166h96v203h-96z" fill="#F3C96A"/>
+  <path d="M766 183h68v79h-68z" fill="#FFF1BE"/>
+  <path d="M800 272v83" stroke="#D4A94D" stroke-width="9"/>
+  <path d="M488 393h631v34H488z" fill="url(#desk)"/>
+  <path d="M523 427h19v105h-19zm542 0h19v105h-19z" fill="#755044"/>
+  <path d="M615 352c16-27 34-39 54-39s38 12 54 39" stroke="#397D69" stroke-width="12" stroke-linecap="round"/>
+  <path d="M668 336v26" stroke="#397D69" stroke-width="12"/>
+  <path d="M0 532c250-72 411-57 570 0H0Z" fill="#77AF91" fill-opacity=".8"/>
+  <path d="M1200 532c144-67 268-80 400-40v108h-400v-68Z" fill="#78AA8A" fill-opacity=".8"/>
+  <g fill="#ECF8FA">
+    <circle cx="178" cy="439" r="5"/><circle cx="227" cy="393" r="4"/><circle cx="1377" cy="145" r="5"/>
+    <circle cx="1454" cy="212" r="4"/><circle cx="120" cy="287" r="4"/>
+  </g>
+  <path d="M192 478h79m1064 0h84" stroke="#E5F6DA" stroke-width="8" stroke-linecap="round"/>
+</svg>

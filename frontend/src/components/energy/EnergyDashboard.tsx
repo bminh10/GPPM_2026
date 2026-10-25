@@ -168,9 +168,9 @@ export default function EnergyDashboard({
             />
           </Flex>
         </Flex>
-        <Typography.Text type="secondary">
+        {/* <Typography.Text type="secondary">
           Chỉ tổng hợp đèn đã cấu hình theo dõi · Bộ lọc riêng với phân tích lịch học · Giờ Việt Nam
-        </Typography.Text>
+        </Typography.Text> */}
         {datasetError && (
           <Alert
             type="error"
@@ -203,14 +203,14 @@ export default function EnergyDashboard({
               {formatDate(selectedDate)} · Cập nhật{' '}
               {new Date(data.as_of * 1000).toLocaleTimeString('vi-VN')}
             </Typography.Text>
-            {data.unknown_seconds > 0 && (
+            {/* {data.unknown_seconds > 0 && (
               <Alert
                 type="warning"
                 showIcon
                 title="Có khoảng thời gian thiếu dữ liệu"
                 description="Tổng chỉ gồm phần ghi nhận được. Trung bình dùng số phòng có dữ liệu trong khoảng tương ứng; không coi phòng chưa có dữ liệu là 0."
               />
-            )}
+            )} */}
           </>
         )}
       </Flex>
@@ -259,9 +259,9 @@ export default function EnergyDashboard({
           <span className="dashboard-panel-icon"><ApartmentOutlined /></span>
           <div>
             <Typography.Text strong>Điện năng theo phòng</Typography.Text>
-            <Typography.Text type="secondary">
+            {/* <Typography.Text type="secondary">
               Chi tiết điện năng và trạng thái dữ liệu từng phòng
-            </Typography.Text>
+            </Typography.Text> */}
           </div>
         </div>
       }

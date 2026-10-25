@@ -17,6 +17,7 @@ export default function ProfilePage() {
       </div>
 
       <Card
+        id="profile-summary"
         styles={{ body: { padding: 0 } }}
         style={{ overflow: 'hidden', borderRadius: 16 }}
       >
@@ -59,7 +60,7 @@ export default function ProfilePage() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={16}>
-          <Card title="Thông tin tài khoản">
+          <Card id="profile-details" title="Thông tin tài khoản">
             <Descriptions
               bordered
               column={1}
@@ -94,7 +95,7 @@ export default function ProfilePage() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title="Tài khoản">
+          <Card id="profile-status" title="Tài khoản">
             <Flex vertical gap={18}>
               <div>
                 <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>

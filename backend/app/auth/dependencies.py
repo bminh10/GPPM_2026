@@ -1,13 +1,18 @@
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from core.config import ADMIN_ROLE_NAMES, DEFAULT_ROLE_NAME
+from core.config import DEFAULT_ROLE_NAME
+from core.permissions import get_role_key
 from db.database import Role, User, get_db
 
 
 def is_admin(user: User) -> bool:
-    return user.role is not None and "".join(user.role.name.split()).lower() in {
-        "".join(name.split()).lower() for name in ADMIN_ROLE_NAMES
+    return user.role is not None and get_role_key(user.role.name) in {"admin", "super_admin"}
+
+
+def is_infrastructure_user(user: User) -> bool:
+    return user.role is not None and get_role_key(user.role.name) in {
+        "admin", "super_admin", "technician",
     }
 
 
@@ -34,5 +39,11 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
     if not is_admin(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Bạn không có quyền thực hiện thao tác này")
+    return user
+
+
+def require_infrastructure_user(user: User = Depends(get_current_user)) -> User:
+    if not is_infrastructure_user(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Bạn không có quyền thực hiện thao tác này")
     return user
