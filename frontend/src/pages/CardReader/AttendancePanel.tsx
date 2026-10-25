@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Button, Card, Flex, InputNumber, Select, Switch, Table, Typography } from 'antd'
+import dayjs from 'dayjs'
+import { Alert, App, Button, Card, DatePicker, Flex, Input, InputNumber, Select, Switch, Table, Typography } from 'antd'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
 import { getAppRole } from '../../routes/roleAccess'
 import { useAuth } from '../../store/authStore'
@@ -28,10 +29,13 @@ function AttendanceControls() {
   const [minutes, setMinutes] = useState<number | null>(15)
   const [selected, setSelected] = useState<string>()
   const [page, setPage] = useState(1)
+  const [mssvInput, setMssvInput] = useState('')
+  const [day, setDay] = useState<string>()
   const status = useQuery({
-    queryKey: ['card-attendance', campusId],
-    queryFn: async () => (await apiClient.get<Status>('/card-attendance', { params: { campus_id: campusId } })).data,
+    queryKey: ['card-attendance', campusId, day],
+    queryFn: async () => (await apiClient.get<Status>('/card-attendance', { params: { campus_id: campusId, date: day } })).data,
     enabled: !!campusId,
+    placeholderData: (previous) => previous,
     refetchInterval: 1500,
     retry: false,
   })
@@ -39,19 +43,42 @@ function AttendanceControls() {
     queryKey: ['attendance-campuses'],
     queryFn: async () => (await apiClient.get<Campus[]>('/campus/all')).data,
   })
+
+  // Tự động chọn Cơ sở 1 (hoặc cơ sở đầu tiên) làm mặc định khi mới vào trang
+  useEffect(() => {
+    if (!campusId && campuses.data && campuses.data.length > 0) {
+      const defaultCampus =
+        campuses.data.find(
+          (c) => c.id === 1 || c.name.toLowerCase().includes('cơ sở 1') || c.name.toLowerCase().includes('cs1'),
+        ) ?? campuses.data[0]
+      if (defaultCampus) {
+        setCampusId(defaultCampus.id)
+      }
+    }
+  }, [campusId, campuses.data])
   const current = status.data?.current
   const readerSession = status.data?.reader_session
   const readerBusyElsewhere = readerSession?.campus_id !== campusId && !!readerSession?.is_open
-  const sessionId = status.data?.sessions.find((item) => item.id === selected)?.id ?? current?.id
+  const sessions = status.data?.sessions ?? []
+  // Khi lọc theo ngày, không rơi về phiên hiện tại (có thể thuộc ngày khác)
+  const sessionId = sessions.find((item) => item.id === selected)?.id ?? (day ? sessions[0]?.id : current?.id)
   const logs = useQuery({
-    queryKey: ['attendance-logs', sessionId, page],
-    queryFn: async () => (await apiClient.get<{ total: number; items: Log[] }>(
-      `/card-attendance/sessions/${sessionId}/logs`, { params: { offset: (page - 1) * 50 } },
+    queryKey: ['attendance-logs', sessionId],
+    queryFn: async () => (await apiClient.get<{ total: number; session_total: number; items: Log[] }>(
+      `/card-attendance/sessions/${sessionId}/logs`, { params: { limit: 1000 } },
     )).data,
     enabled: !!sessionId,
+    placeholderData: (previous) => previous,
     refetchInterval: 1500,
     retry: false,
   })
+  // Lọc tức thì trên client trong RAM: 0ms độ trễ, không bắn API khi gõ phím
+  const filteredLogs = useMemo(() => {
+    const items = logs.data?.items ?? []
+    const keyword = mssvInput.trim()
+    if (!keyword) return items
+    return items.filter((item) => item.mssv.includes(keyword))
+  }, [logs.data?.items, mssvInput])
   const mutation = useMutation({
     mutationFn: async (action: { path: string; payload: object }) => {
       await apiClient.post(action.path, action.payload)
@@ -59,6 +86,7 @@ function AttendanceControls() {
     onSuccess: () => {
       setSelected(undefined)
       setPage(1)
+      setMssvInput('')
       void client.invalidateQueries({ queryKey: ['card-attendance'] })
       void client.invalidateQueries({ queryKey: ['attendance-logs'] })
     },
@@ -111,7 +139,7 @@ function AttendanceControls() {
         <Typography.Text>Trạm reader: {status.data?.reader_id ?? 'Chọn cơ sở để xem'}. Chọn cơ sở để xem và bắt đầu phiên:</Typography.Text>
         <Select id="reader-campus-select" aria-label="Cơ sở điểm danh" placeholder="Chọn cơ sở" value={campusId}
           options={campuses.data?.map((item) => ({ value: item.id, label: item.name }))}
-          onChange={(value) => { setCampusId(value); setSelected(undefined); setPage(1) }}
+          onChange={(value) => { setCampusId(value); setSelected(undefined); setPage(1); setMssvInput('') }}
           disabled={mutation.isPending} style={{ maxWidth: 440 }} />
         {readerBusyElsewhere && readerSession && <Alert type="warning" showIcon
           title={`Bộ đọc ${status.data?.reader_id} đang được ${readerSession.campus_name} sử dụng`}
@@ -137,22 +165,44 @@ function AttendanceControls() {
           </Button>
         </Flex>
         <div id="reader-session-history">
-        <Typography.Text strong>Lịch sử của cơ sở đã chọn (50 phiên gần nhất)</Typography.Text>
+        <Flex vertical gap={12}>
+        <Typography.Text strong>Lịch sử của cơ sở đã chọn ({day ? 'theo ngày' : '50 phiên gần nhất'})</Typography.Text>
+        <DatePicker aria-label="Lọc phiên theo ngày" placeholder="Chọn ngày điểm danh" format="DD/MM/YYYY"
+          allowClear value={day ? dayjs(day) : null} disabled={!campusId} style={{ maxWidth: 440 }}
+          disabledDate={(value) => value.isAfter(dayjs(), 'day')}
+          onChange={(value) => { setDay(value ? value.format('YYYY-MM-DD') : undefined); setSelected(undefined); setPage(1) }} />
+        {day && status.data && sessions.length === 0 && <Alert type="info" showIcon
+          title={`Không có phiên điểm danh trong ngày ${dayjs(day).format('DD/MM/YYYY')}`} />}
         <Select aria-label="Phiên xem log" placeholder="Chưa có phiên" value={sessionId}
-          options={status.data?.sessions.map((item) => ({
+          options={sessions.map((item) => ({
             value: item.id, label: `${item.campus_name} · ${date(item.started_at)} · ${item.is_open ? 'Đang mở' : 'Đã kết thúc'}`,
           }))}
-          onChange={(value) => { setSelected(value); setPage(1) }} />
+          onChange={(value) => { setSelected(value); setPage(1); setMssvInput('') }} />
         {logs.error && <Alert type="error" title="Không tải được log điểm danh" description={getErrorMessage(logs.error)} showIcon />}
-        <Typography.Text>Số MSSV đã ghi nhận trong phiên đang xem: {logs.data?.total ?? 0}</Typography.Text>
-        <Table<Log> rowKey="id" dataSource={logs.data?.items ?? []} loading={logs.isFetching && !logs.data}
+        <Input.Search aria-label="Tìm MSSV trong phiên" placeholder="Tìm MSSV trong phiên (nhập toàn bộ hoặc một phần)" allowClear
+          inputMode="numeric" maxLength={10} value={mssvInput} disabled={!sessionId} style={{ maxWidth: 440 }}
+          onChange={(event) => {
+            setMssvInput(event.target.value.replace(/\D/g, ''))
+            setPage(1)
+          }}
+          onSearch={(value) => {
+            setMssvInput(value.replace(/\D/g, ''))
+            setPage(1)
+          }} />
+        <Typography.Text>
+          {mssvInput
+            ? `Tìm thấy ${filteredLogs.length} / ${logs.data?.items?.length ?? 0} MSSV khớp "${mssvInput}" trong phiên đang xem`
+            : `Số MSSV đã ghi nhận trong phiên đang xem: ${logs.data?.items?.length ?? 0}`}
+        </Typography.Text>
+        <Table<Log> rowKey="id" dataSource={filteredLogs} loading={logs.isPending && !logs.data}
           scroll={{ x: 600 }} columns={[
             { title: 'Mã số sinh viên', dataIndex: 'mssv' },
             { title: 'Giờ nhận tại server', dataIndex: 'received_at', render: (value: number) => date(value) },
             { title: 'Trạm đọc', dataIndex: 'reader_id' },
           ]}
-          pagination={{ current: page, pageSize: 50, total: logs.data?.total ?? 0, showSizeChanger: false, onChange: setPage }}
-          locale={{ emptyText: 'Chưa có MSSV được ghi nhận trong phiên' }} />
+          pagination={{ current: page, pageSize: 50, total: filteredLogs.length, showSizeChanger: false, onChange: setPage }}
+          locale={{ emptyText: mssvInput ? `Không có MSSV nào khớp "${mssvInput}" trong phiên` : 'Chưa có MSSV được ghi nhận trong phiên' }} />
+        </Flex>
         </div>
       </Flex>
     </Card>

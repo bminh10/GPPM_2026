@@ -8,11 +8,10 @@ import {
   DatabaseOutlined,
   EnvironmentOutlined,
   IdcardOutlined,
-  PlayCircleOutlined,
   RightOutlined,
   TeamOutlined,
 } from '@ant-design/icons'
-import { Alert, Button, Card, Col, Flex, Row, Tag, Tour, Typography } from 'antd'
+import { Button, Card, Col, Flex, Row, Tour, Typography } from 'antd'
 import type { TourProps } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { ROUTE_PATHS } from '../../routes/menuConfig'

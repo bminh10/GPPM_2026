@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../card-reader"
+		},
+		{
+			"name": "card-writer",
+			"path": "."
+		}
+	],
+	"settings": {}
+}

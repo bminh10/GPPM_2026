@@ -2,6 +2,7 @@
 import os
 import time
 import uuid
+from datetime import date as Date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -49,6 +50,7 @@ class StartSession(BaseModel):
 
 
 router = APIRouter(prefix="/card-attendance", tags=["Card attendance"])
+VN_TZ = timezone(timedelta(hours=7))
 
 
 def station(db: Session, reader_id: str) -> AttendanceStation:
@@ -96,7 +98,11 @@ def record_scan(db: Session, row: AttendanceStation, mssv: str | None):
 
 
 @router.get("", dependencies=[Depends(require_infrastructure_user)])
-def status(campus_id: int | None = Query(default=None, gt=0), db: Session = Depends(get_db)):
+def status(
+    campus_id: int | None = Query(default=None, gt=0),
+    day: Date | None = Query(default=None, alias="date", description="YYYY-MM-DD, giờ Việt Nam"),
+    db: Session = Depends(get_db),
+):
     row = station(db, os.getenv("CARD_READER_ID", "card-reader-01"))
     if campus_id is not None and db.get(Campus, campus_id) is None:
         raise HTTPException(404, "Cơ sở không tồn tại")
@@ -105,12 +111,16 @@ def status(campus_id: int | None = Query(default=None, gt=0), db: Session = Depe
     query = db.query(AttendanceSession).filter_by(reader_id=row.reader_id)
     if campus_id is not None:
         query = query.filter_by(campus_id=campus_id)
-    sessions = query.order_by(
-        AttendanceSession.started_at.desc(), AttendanceSession.id.desc(),
-    ).limit(50).all()
-    current = sessions[0] if campus_id is not None and sessions else (
-        reader_session if campus_id is None else None
-    )
+    ordering = (AttendanceSession.started_at.desc(), AttendanceSession.id.desc())
+    latest = query.order_by(*ordering).first()
+    listing = query
+    if day is not None:
+        day_start = datetime.combine(day, datetime.min.time(), tzinfo=VN_TZ).timestamp()
+        listing = query.filter(
+            AttendanceSession.started_at >= day_start, AttendanceSession.started_at < day_start + 86400,
+        )
+    sessions = listing.order_by(*ordering).limit(50 if day is None else None).all()
+    current = latest if campus_id is not None else reader_session
     response = {
         "reader_id": row.reader_id, "server_time": now,
         "current": session_view(current) if current else None,
@@ -163,14 +173,23 @@ def close(session_id: str, admin: User = Depends(require_infrastructure_user), d
 
 
 @router.get("/sessions/{session_id}/logs", dependencies=[Depends(require_infrastructure_user)])
-def logs(session_id: str, offset: int = Query(default=0, ge=0), db: Session = Depends(get_db)):
+def logs(
+    session_id: str,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=1000),
+    mssv: str | None = Query(default=None, pattern=r"^\d{1,10}$", description="Tìm theo một phần MSSV"),
+    db: Session = Depends(get_db),
+):
     session = db.get(AttendanceSession, session_id)
     if session is None or session.reader_id != os.getenv("CARD_READER_ID", "card-reader-01"):
         raise HTTPException(404, "Không tìm thấy phiên điểm danh")
     query = db.query(AttendanceLog).filter_by(session_id=session.id)
+    session_total = query.count()
+    if mssv:
+        query = query.filter(AttendanceLog.mssv.contains(mssv, autoescape=True))
     count = query.count()
-    rows = query.order_by(AttendanceLog.received_at.desc(), AttendanceLog.id.desc()).offset(offset).limit(50).all()
-    return {"total": count, "items": [
+    rows = query.order_by(AttendanceLog.received_at.desc(), AttendanceLog.id.desc()).offset(offset).limit(limit).all()
+    return {"total": count, "session_total": session_total, "items": [
         {"id": row.id, "mssv": row.mssv, "reader_id": row.reader_id, "received_at": row.received_at}
         for row in rows
     ]}

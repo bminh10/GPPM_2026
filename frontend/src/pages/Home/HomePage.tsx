@@ -3,7 +3,6 @@ import {
   AuditOutlined,
   CalendarOutlined,
   DashboardOutlined,
-  DatabaseOutlined,
   EnvironmentOutlined,
   IdcardOutlined,
   RightOutlined,

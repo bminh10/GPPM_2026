@@ -1,0 +1,14 @@
+.git
+.vscode
+node_modules
+frontend
+iot
+**/.env
+**/.env.*
+!backend/.env
+**/DeviceLocal.h
+**/.pio
+**/node_modules
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
