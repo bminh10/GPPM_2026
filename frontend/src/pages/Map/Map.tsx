@@ -501,7 +501,7 @@ function CampusView({
         <div id="map-building-selector">
           <BuildingSelector buildings={buildings} value={buildingId} onChange={selectBuilding} onReset={selectNone} />
         </div>
-        <div id="map-room-list">
+        <div id="map-room-list" style={{ flex: 1, minHeight: 0, display: 'flex' }}>
           <RoomListPanel
             rooms={rooms}
             buildings={buildings}
@@ -519,7 +519,20 @@ function CampusView({
       )}
 
       {selectedRoom && (
-        <Flex id="map-room-details" style={{ position: 'absolute', right: 84, bottom: 16, width: 350, maxHeight: 'calc(100% - 32px)', overflowY: 'auto', zIndex: 2 }}>
+        <Flex
+          id="map-room-details"
+          onWheel={(event) => event.stopPropagation()}
+          style={{
+            position: 'absolute',
+            right: 84,
+            bottom: 16,
+            width: 350,
+            maxHeight: 'calc(100% - 32px)',
+            overflowY: 'auto',
+            overscrollBehaviorY: 'contain',
+            zIndex: 2,
+          }}
+        >
           <RoomDetailCard
             room={selectedRoom}
             buildingName={building?.name ?? ''}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { Alert, App, Button, Card, DatePicker, Flex, Input, InputNumber, Select, Switch, Table, Typography } from 'antd'
+import { IdcardOutlined } from '@ant-design/icons'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
 import { getAppRole } from '../../routes/roleAccess'
 import { useAuth } from '../../store/authStore'
@@ -120,7 +121,18 @@ function AttendanceControls() {
     onOk: () => mutation.mutateAsync({ path: `/card-attendance/sessions/${current?.id}/close`, payload: {} }),
   })
   return (
-    <Card id="reader-attendance-session" title="Điểm danh bằng thẻ · Toàn cơ sở">
+    <Card
+      id="reader-attendance-session"
+      title={
+        <Flex align="center" gap={12}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 11, background: '#d6eaf6', color: '#12658d', fontSize: 17 }}>
+            <IdcardOutlined />
+          </span>
+          <Typography.Text strong style={{ color: '#164d6b', fontSize: 14 }}>Điểm danh bằng thẻ · Toàn cơ sở</Typography.Text>
+        </Flex>
+      }
+      styles={{ header: { background: 'linear-gradient(105deg, #eaf4fb, #f7fbfe)', borderBottomColor: '#dbe9f3' } }}
+    >
       <Flex vertical gap={12}>
         <Alert type="info" showIcon title="Chỉ ghi nhận MSSV đã quét, chưa xác minh danh tính"
           description="Không có bảng sinh viên hay danh sách vắng. Mỗi MSSV chỉ ghi nhận lần đầu trong phiên; lượt sau báo “Đã điểm danh”. Ngoài phiên báo “Đã quá giờ điểm danh”." />
