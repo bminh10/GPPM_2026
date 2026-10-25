@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Card, Checkbox, Descriptions, Flex, Input, Tag, Typography } from 'antd'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
@@ -28,6 +28,9 @@ function WriterStationPage() {
   const client = useQueryClient()
   const [mssv, setMssv] = useState('')
   const [consentUid, setConsentUid] = useState<string | null>(null)
+  const initialSeenAtRef = useRef<number | null>(null)
+  const initialJobIdRef = useRef<string | null>(null)
+
   const query = useQuery({
     queryKey: ['card-writer'],
     queryFn: async () => (await apiClient.get<Station>('/card-writer')).data,
@@ -35,9 +38,26 @@ function WriterStationPage() {
     retry: false,
   })
   const data = query.data
+
+  if (data && initialSeenAtRef.current === null) {
+    initialSeenAtRef.current = data.seen_at ?? 0
+    initialJobIdRef.current = data.job?.id ?? null
+  }
+
+  const isNewCard = Boolean(
+    data?.uid &&
+    initialSeenAtRef.current !== null &&
+    (data.seen_at ?? 0) > initialSeenAtRef.current
+  )
+  const activeUid: string | null = isNewCard ? (data?.uid ?? null) : null
+  const activeCardType = isNewCard ? (data?.card_type || 'Chưa nhận diện') : 'Chưa nhận diện'
+  const activeSeenAt = isNewCard ? (data?.seen_at ?? null) : null
+
   const job = data?.job
   const busy = job?.state === 'pending' || job?.state === 'writing'
-  const freshCard = data?.fresh_card === true
+  const showJob = Boolean(job && (busy || job.id !== initialJobIdRef.current))
+  const freshCard = isNewCard && data?.fresh_card === true
+
   const mutation = useMutation({
     mutationFn: async (action: { path: string; payload: object }) => {
       await apiClient.post(action.path, action.payload)
@@ -46,8 +66,8 @@ function WriterStationPage() {
     onError: (error) => { void message.error(getErrorMessage(error)) },
   })
   const authorize = () => {
-    if (!data?.uid) return
-    const uid = data.uid
+    if (!activeUid) return
+    const uid = activeUid
     modal.confirm({
       title: `Ghi MSSV ${mssv} vào thẻ ${uid}?`,
       content: 'Chỉ dùng thẻ trắng/thẻ mẫu thuộc quyền của bạn. Thao tác thay nội dung khối 4, không phải xác minh sinh viên. Sau khi xác nhận, nhấc và chạm lại đúng thẻ.',
@@ -91,9 +111,9 @@ function WriterStationPage() {
         </Tag>
         <Descriptions column={1} items={[
           { key: 'station', label: 'Trạm', children: data?.writer_id ?? 'Đang tải' },
-          { key: 'uid', label: 'UID thẻ cuối', children: data?.uid ?? 'Chưa có thẻ tương thích' },
-          { key: 'type', label: 'Loại', children: data?.card_type || 'Chưa nhận diện' },
-          { key: 'time', label: 'Nhận diện lúc', children: data?.seen_at ? new Date(data.seen_at * 1000).toLocaleString('vi-VN') : 'Chưa có' },
+          { key: 'uid', label: 'UID thẻ cuối', children: activeUid ?? 'Chưa có thẻ tương thích' },
+          { key: 'type', label: 'Loại', children: activeCardType },
+          { key: 'time', label: 'Nhận diện lúc', children: activeSeenAt ? new Date(activeSeenAt * 1000).toLocaleString('vi-VN') : 'Chưa có' },
         ]} />
       </Card>
       <Card
@@ -109,21 +129,21 @@ function WriterStationPage() {
           {mssv && !/^245101[0-9]{4}$/.test(mssv) && <Typography.Text type="danger">
             MSSV chưa hợp lệ: nhập đủ 10 chữ số, bắt đầu bằng 245101, ví dụ 2451010001.
           </Typography.Text>}
-          <Checkbox id="writer-card-confirmation" checked={!!data?.uid && consentUid === data.uid}
-            disabled={!data?.uid || busy || mutation.isPending}
-            onChange={(event) => setConsentUid(event.target.checked ? data?.uid ?? null : null)}>
+          <Checkbox id="writer-card-confirmation" checked={!!activeUid && consentUid === activeUid}
+            disabled={!activeUid || busy || mutation.isPending}
+            onChange={(event) => setConsentUid(event.target.checked ? activeUid : null)}>
             Tôi xác nhận thẻ UID đang hiển thị là thẻ của tôi và cho phép thay nội dung khối 4.
           </Checkbox>
-          {!data?.uid && <Alert type="info" showIcon title="Chưa thể xác nhận: hệ thống chưa nhận được UID thẻ"
+          {!activeUid && <Alert type="info" showIcon title="Chưa thể xác nhận: hệ thống chưa nhận được UID thẻ"
             description="Cấu hình Wi-Fi và địa chỉ backend cho writer, nạp lại firmware rồi chạm thẻ lên RC522. Khi UID xuất hiện ở bước 1, ô xác nhận mới được mở." />}
-          {!freshCard && <Typography.Text type="secondary">Nhấc thẻ rồi chạm lại để lấy UID mới (có hiệu lực 60 giây).</Typography.Text>}
+          {activeUid && !freshCard && <Typography.Text type="secondary">Nhấc thẻ rồi chạm lại để lấy UID mới (có hiệu lực 60 giây).</Typography.Text>}
           <Button id="writer-authorize" type="primary" onClick={authorize} loading={mutation.isPending}
-            disabled={!!query.error || !data?.online || !freshCard || busy || consentUid !== data?.uid || !/^245101[0-9]{4}$/.test(mssv)}>
+            disabled={!!query.error || !data?.online || !freshCard || busy || !activeUid || consentUid !== activeUid || !/^245101[0-9]{4}$/.test(mssv)}>
             Xác nhận MSSV và ủy quyền ghi
           </Button>
         </Flex>
       </Card>
-      {job && <Card
+      {showJob && job && <Card
         id="writer-job-result"
         title={<Typography.Text strong style={{ color: '#164d6b' }}>Kết quả lệnh ghi gần nhất</Typography.Text>}
         styles={{ header: { background: 'linear-gradient(105deg, #eaf4fb, #f7fbfe)', borderBottomColor: '#dbe9f3' } }}
