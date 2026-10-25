@@ -59,14 +59,11 @@ export default function AuthPage({ mode }: AuthPageProps) {
       <div className="flex items-center justify-center px-6 py-10">
         <div className="w-full max-w-md">
           <div className="mb-8">
-            <Typography.Title level={2} style={{ marginBottom: 4 }}>
-              {isSignIn ? 'Chào mừng trở lại 👋' : 'Tạo tài khoản mới'}
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              {isSignIn
-                ? 'Đăng nhập để theo dõi và tối ưu tài nguyên phòng học.'
-                : 'Chỉ mất 1 phút để bắt đầu với SmartOU.'}
-            </Typography.Text>
+            <div
+              className="flex justify-center border-2 bg-blue-900 shadow-blue-950 shadow-lg rounded-2xl"
+            >
+              <h1 className="text-5xl text-white font-bold">SMART OU</h1>
+            </div>
           </div>
 
           <Segmented
@@ -98,7 +95,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
                   { type: 'email', message: 'Email không hợp lệ' },
                 ]}
               >
-                <Input prefix={<MailOutlined />} placeholder="ten@truong.edu.vn" autoComplete="email" />
+                <Input prefix={<MailOutlined />} placeholder="abc@gmail.com" autoComplete="email" />
               </Form.Item>
               <Form.Item
                 name="password"
@@ -107,10 +104,10 @@ export default function AuthPage({ mode }: AuthPageProps) {
               >
                 <Input.Password prefix={<LockOutlined />} placeholder="••••••••" autoComplete="current-password" />
               </Form.Item>
-              <Form.Item name="remember" valuePropName="checked">
+              {/* <Form.Item name="remember" valuePropName="checked">
                 <Checkbox>Ghi nhớ tôi</Checkbox>
-              </Form.Item>
-              <Button type="primary" htmlType="submit" block loading={loading}>
+              </Form.Item> */}
+              <Button style={{ backgroundColor: '#1c398e', color: 'white',}} htmlType="submit" block loading={loading}>
                 Đăng nhập
               </Button>
             </Form>
@@ -133,7 +130,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
                   { type: 'email', message: 'Email không hợp lệ' },
                 ]}
               >
-                <Input prefix={<MailOutlined />} placeholder="ten@truong.edu.vn" autoComplete="email" />
+                <Input prefix={<MailOutlined />} placeholder="abc@gmail.com" autoComplete="email" />
               </Form.Item>
               <Form.Item
                 name="password"
