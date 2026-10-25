@@ -300,6 +300,36 @@ class LightingTests(unittest.TestCase):
             self.assertEqual(self.client.get("/card-attendance?campus_id=999").status_code, 404)
             self.assertEqual(self.client.get("/card-attendance?campus_id=0").status_code, 422)
 
+    def test_attendance_sessions_filter_by_vietnam_day(self):
+        from datetime import datetime, timedelta, timezone
+        from app.cards.router import CardScan
+        with SessionLocal.begin() as db:
+            db.add(CardScan(reader_id="test-reader", received_at=0, payload=""))
+        with patch.dict(os.environ, {"CARD_READER_ID": "test-reader", "CARD_READER_KEY": KEY}):
+            first = self.client.post("/card-attendance/sessions", json={"campus_id": 1}).json()["id"]
+            self.client.post(f"/card-attendance/sessions/{first}/close")
+            second = self.client.post("/card-attendance/sessions", json={"campus_id": 1}).json()["id"]
+            vn = timezone(timedelta(hours=7))
+            with SessionLocal.begin() as db:
+                db.get(AttendanceSession, first).started_at = datetime(2026, 10, 24, 23, 50, tzinfo=vn).timestamp()
+                db.get(AttendanceSession, second).started_at = datetime(2026, 10, 25, 0, 10, tzinfo=vn).timestamp()
+
+            def ids(day):
+                data = self.client.get(f"/card-attendance?campus_id=1&date={day}").json()
+                return [item["id"] for item in data["sessions"]], data
+
+            self.assertEqual(ids("2026-10-24")[0], [first])
+            listed, data = ids("2026-10-25")
+            self.assertEqual(listed, [second])
+            self.assertEqual(ids("2026-10-26")[0], [])
+            # The current session is independent from the day filter.
+            self.assertEqual(data["current"]["id"], second)
+            self.assertEqual(self.client.get("/card-attendance?campus_id=1&date=25-10-2026").status_code, 422)
+            self.assertEqual(
+                [item["id"] for item in self.client.get("/card-attendance?campus_id=1").json()["sessions"]],
+                [second, first],
+            )
+
     def test_attendance_server_deadline_persistence_and_pagination(self):
         from app.cards.router import CardScan
         with SessionLocal.begin() as db:
