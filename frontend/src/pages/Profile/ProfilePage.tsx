@@ -1,6 +1,8 @@
 import { Avatar, Card, Col, Descriptions, Flex, Row, Tag, Typography } from 'antd'
 import { CheckCircleOutlined, MailOutlined, UserOutlined } from '@ant-design/icons'
 import { useAuth } from '../../store/authStore'
+// import { url } from 'inspector'
+import background from '../../assets/ĐẠI HỌC MỞ.png'
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -19,12 +21,14 @@ export default function ProfilePage() {
       <Card
         id="profile-summary"
         styles={{ body: { padding: 0 } }}
-        style={{ overflow: 'hidden', borderRadius: 16 }}
+        style={{ overflow: 'hidden', borderRadius: 16, border: "3px solid blue" }}
       >
         <div
           style={{
-            height: 150,
-            background: 'linear-gradient(120deg, #0a5ca8 0%, #0ea5e9 60%, #67e8f9 100%)',
+            height: 200,
+            backgroundImage: `url(${background})`,
+            backgroundSize: 'cover',               // Bao phủ vừa vặn khung div
+            // backgroundPosition: 'center',
           }}
         />
         <Flex
