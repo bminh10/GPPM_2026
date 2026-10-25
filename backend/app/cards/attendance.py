@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
-from app.auth.dependencies import require_admin
+from app.auth.dependencies import require_infrastructure_user
 from db.database import Base, Campus, User, engine, get_db
 
 
@@ -95,7 +95,7 @@ def record_scan(db: Session, row: AttendanceStation, mssv: str | None):
     return {**result, "status": "recorded", "message": "Điểm danh thành công"}
 
 
-@router.get("", dependencies=[Depends(require_admin)])
+@router.get("", dependencies=[Depends(require_infrastructure_user)])
 def status(campus_id: int | None = Query(default=None, gt=0), db: Session = Depends(get_db)):
     row = station(db, os.getenv("CARD_READER_ID", "card-reader-01"))
     if campus_id is not None and db.get(Campus, campus_id) is None:
@@ -122,7 +122,7 @@ def status(campus_id: int | None = Query(default=None, gt=0), db: Session = Depe
 
 
 @router.post("/sessions")
-def start(data: StartSession, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def start(data: StartSession, admin: User = Depends(require_infrastructure_user), db: Session = Depends(get_db)):
     row = station(db, os.getenv("CARD_READER_ID", "card-reader-01"))
     campus = db.query(Campus).filter_by(id=data.campus_id).with_for_update().first()
     if campus is None:
@@ -149,7 +149,7 @@ def start(data: StartSession, admin: User = Depends(require_admin), db: Session 
 
 
 @router.post("/sessions/{session_id}/close")
-def close(session_id: str, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def close(session_id: str, admin: User = Depends(require_infrastructure_user), db: Session = Depends(get_db)):
     row = station(db, os.getenv("CARD_READER_ID", "card-reader-01"))
     now = time.time()
     current = current_session(db, row, now)
@@ -162,7 +162,7 @@ def close(session_id: str, admin: User = Depends(require_admin), db: Session = D
     return response
 
 
-@router.get("/sessions/{session_id}/logs", dependencies=[Depends(require_admin)])
+@router.get("/sessions/{session_id}/logs", dependencies=[Depends(require_infrastructure_user)])
 def logs(session_id: str, offset: int = Query(default=0, ge=0), db: Session = Depends(get_db)):
     session = db.get(AttendanceSession, session_id)
     if session is None or session.reader_id != os.getenv("CARD_READER_ID", "card-reader-01"):

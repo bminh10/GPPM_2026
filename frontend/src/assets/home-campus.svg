@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="280" y1="40" x2="1370" y2="600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#164E8A"/>
+      <stop offset="1" stop-color="#4FB5C8"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="900" y1="150" x2="1430" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#BFEAFF"/>
+      <stop offset="1" stop-color="#4389B6"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="800" y1="390" x2="800" y2="600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6AB89B"/>
+      <stop offset="1" stop-color="#174E66"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#sky)" d="M0 0h1600v600H0z"/>
+  <circle cx="1310" cy="112" r="54" fill="#FDE68A" fill-opacity=".9"/>
+  <path d="M0 380 260 236l200 114 237-187 233 188 198-123 260 152 212-92v212H0V380Z" fill="#5A9FA5" fill-opacity=".56"/>
+  <path d="M0 432 240 320l211 100 236-130 224 111 218-99 250 115 221-70v253H0V432Z" fill="#2B7180"/>
+  <path d="M0 473c230-57 398-28 611 9 268 47 514-4 989-92v210H0V473Z" fill="url(#ground)"/>
+  <path d="M610 200h484v276H610z" fill="#E9F4F3"/>
+  <path d="M584 199 851 93l267 106H584Z" fill="#F8FAFC"/>
+  <path d="M647 234h410v20H647z" fill="#A6C8D1"/>
+  <path d="M647 274h410v20H647z" fill="#A6C8D1"/>
+  <path d="M647 314h410v20H647z" fill="#A6C8D1"/>
+  <path d="M647 354h410v20H647z" fill="#A6C8D1"/>
+  <path d="M675 229v150m73-150v150m73-150v150m73-150v150m73-150v150m73-150v150" stroke="#D4E4E8" stroke-width="10"/>
+  <path d="M762 390h175v86H762z" fill="#1D4E69"/>
+  <path d="M1117 264h282v212h-282z" fill="url(#glass)"/>
+  <path d="M1142 291h232v21h-232zm0 44h232v21h-232zm0 44h232v21h-232z" fill="#D5F2F7" fill-opacity=".7"/>
+  <path d="M1180 270v206m72-206v206m72-206v206" stroke="#2C6E8B" stroke-opacity=".45" stroke-width="9"/>
+  <path d="M0 489h1600" stroke="#D3F4CB" stroke-opacity=".38" stroke-width="5"/>
+  <g fill="#174D59">
+    <path d="M270 421h10v73h-10z"/><circle cx="275" cy="408" r="31"/>
+    <path d="M397 438h8v58h-8z"/><circle cx="401" cy="427" r="24"/>
+    <path d="M1454 420h10v76h-10z"/><circle cx="1459" cy="407" r="34"/>
+    <path d="M1530 443h7v53h-7z"/><circle cx="1534" cy="431" r="22"/>
+  </g>
+  <path d="M510 600c61-59 141-91 246-96 127-7 218 28 301 96H510Z" fill="#DCEEDB" fill-opacity=".75"/>
+</svg>

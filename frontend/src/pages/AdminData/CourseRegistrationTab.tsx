@@ -19,6 +19,8 @@ import { DownloadOutlined, InboxOutlined, UploadOutlined } from '@ant-design/ico
 import type { UploadFile } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
+import { useAuth } from '../../store/authStore'
+import { getAppRole } from '../../routes/roleAccess'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 import SearchableTable from '../../components/common/SearchableTable'
 import { csvTemplate, parseCsv } from './csvUtils'
@@ -135,6 +137,8 @@ function downloadTemplate() {
 }
 
 export default function CourseRegistrationTab() {
+  const { user } = useAuth()
+  const canDelete = ['super_admin', 'staff'].includes(getAppRole(user?.role))
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [classes, setClasses] = useState<ClassOption[]>([])
   const [subjects, setSubjects] = useState<SubjectOption[]>([])
@@ -153,13 +157,9 @@ export default function CourseRegistrationTab() {
   const [editing, setEditing] = useState<Registration | null>(null)
   const [selectedSemesterKeyState, setSelectedSemesterKey] = useState<string>()
   const [saving, setSaving] = useState(false)
-  const [creating, setCreating] = useState(false)
   const [messageApi, contextHolder] = message.useMessage()
   const [form] = Form.useForm<RegistrationFormValues>()
-  const [createForm] = Form.useForm<RegistrationFormValues>()
-  const createClassId = Form.useWatch('lop_id', createForm)
   const editClassId = Form.useWatch('lop_id', form)
-  const createClassSize = classes.find((item) => item.id === createClassId)?.si_so
   const editClassSize = classes.find((item) => item.id === editClassId)?.si_so
 
   const loadRegistrations = useCallback(async () => {
@@ -283,21 +283,8 @@ export default function CourseRegistrationTab() {
     }
   }
 
-  const handleCreate = async (values: RegistrationFormValues) => {
-    setCreating(true)
-    try {
-      await apiClient.post('/course-registrations', values)
-      messageApi.success('Đã tạo đăng ký môn học')
-      createForm.resetFields()
-      await loadRegistrations()
-    } catch (error: unknown) {
-      messageApi.error(getErrorMessage(error))
-    } finally {
-      setCreating(false)
-    }
-  }
-
   const handleDelete = useCallback(async (registration: Registration) => {
+    if (!canDelete) return
     try {
       await apiClient.delete(`/course-registrations/${registration.id}`)
       messageApi.success('Đã xóa đăng ký môn học')
@@ -305,9 +292,10 @@ export default function CourseRegistrationTab() {
     } catch (error: unknown) {
       messageApi.error(getErrorMessage(error))
     }
-  }, [loadRegistrations, messageApi])
+  }, [canDelete, loadRegistrations, messageApi])
 
   const handleBulkDelete = useCallback(async (selected: Registration[]) => {
+    if (!canDelete) return []
     const deletedIds: number[] = []
     const failures: string[] = []
     for (const registration of selected) {
@@ -330,7 +318,7 @@ export default function CourseRegistrationTab() {
       messageApi.success(`Đã xóa ${deletedIds.length} đăng ký môn học`)
     }
     return deletedIds
-  }, [classes, loadRegistrations, messageApi, subjects])
+  }, [canDelete, classes, loadRegistrations, messageApi, subjects])
 
   const columns = useMemo<ColumnsType<Registration>>(
     () => [
@@ -374,7 +362,7 @@ export default function CourseRegistrationTab() {
             >
               Sửa
             </Button>
-            <Popconfirm
+            {canDelete && <Popconfirm
               title="Xóa đăng ký môn học?"
               description="Không thể xóa nếu đăng ký đã có thời khóa biểu."
               okText="Xóa"
@@ -383,12 +371,12 @@ export default function CourseRegistrationTab() {
               onConfirm={() => void handleDelete(registration)}
             >
               <Button type="link" danger size="small">Xóa</Button>
-            </Popconfirm>
+            </Popconfirm>}
           </Space>
         ),
       },
     ],
-    [classes, form, handleDelete, semesters, subjects],
+    [canDelete, classes, form, handleDelete, semesters, subjects],
   )
 
   const unassignedRegistrations = registrations.filter(
@@ -425,64 +413,6 @@ export default function CourseRegistrationTab() {
   return (
     <Space direction="vertical" size="large" style={{ display: 'flex' }}>
       {contextHolder}
-      {/* <Card title="Tạo đăng ký môn học">
-        {referencesError && (
-          <Alert
-            type="error"
-            showIcon
-            message="Không tải được danh sách tham chiếu"
-            description={referencesError}
-            style={{ marginBottom: 16 }}
-          />
-        )}
-        <Form form={createForm} layout="vertical" onFinish={handleCreate}>
-          <Form.Item name="lop_id" label="Lớp" rules={[{ required: true, message: 'Vui lòng chọn lớp' }]}>
-            <SearchFilterSelect
-              options={classes.map((item) => ({ value: item.id, label: item.name }))}
-              placeholder="Chọn lớp"
-            />
-          </Form.Item>
-          <Form.Item name="mon_id" label="Môn học" rules={[{ required: true, message: 'Vui lòng chọn môn học' }]}>
-            <SearchFilterSelect
-              options={subjects.map((item) => ({ value: item.id, label: item.name }))}
-              placeholder="Chọn môn học"
-            />
-          </Form.Item>
-          <Form.Item
-            name="hoc_ky_id"
-            label="Học kỳ"
-            rules={[{ required: true, message: 'Vui lòng chọn học kỳ' }]}
-          >
-            <SearchFilterSelect
-              options={semesters.map((item) => ({ value: item.id, label: item.name }))}
-              placeholder="Chọn học kỳ"
-            />
-          </Form.Item>
-          <Form.Item
-            name="so_luong"
-            label="Số lượng"
-            rules={[
-              { required: true, message: 'Vui lòng nhập số lượng' },
-              {
-                validator: (_, value: number | null | undefined) =>
-                  value === undefined || value === null || createClassSize == null || value <= createClassSize
-                    ? Promise.resolve()
-                    : Promise.reject(new Error(`Số lượng không được vượt quá sĩ số lớp (${createClassSize}).`)),
-              },
-            ]}
-          >
-            <InputNumber
-              min={0}
-              max={createClassSize ?? undefined}
-              precision={0}
-              style={{ width: '100%' }}
-            />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" loading={creating}>
-            Tạo đăng ký
-          </Button>
-        </Form>
-      </Card> */}
       <Card
         title="Nhập đăng ký môn học bằng CSV"
         extra={
@@ -579,7 +509,6 @@ export default function CourseRegistrationTab() {
 
       <Card
         title="Danh sách đăng ký môn học"
-        extra={<Button onClick={() => void loadRegistrations()} loading={loading}>Tải lại</Button>}
       >
         {loadError ? (
           <Alert type="error" showIcon message={loadError} />
@@ -615,7 +544,7 @@ export default function CourseRegistrationTab() {
                   registration.so_luong,
                 ].join(' ')}
                 searchPlaceholder="Tìm theo lớp hoặc môn học..."
-                onBulkDelete={handleBulkDelete}
+                onBulkDelete={canDelete ? handleBulkDelete : undefined}
                 emptyText="Không tìm thấy đăng ký môn học"
                 pagination={{ pageSize: 8, showSizeChanger: false }}
               />

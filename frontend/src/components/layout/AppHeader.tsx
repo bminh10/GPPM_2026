@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom'
 import { ROUTE_PATHS } from '../../routes/menuConfig'
 import { logOut } from '../../services/AuthService'
 import UserMenu from './UserMenu'
-import Logo from '../logo/Logo';
 
 type AppHeaderProps = {
   collapsed: boolean

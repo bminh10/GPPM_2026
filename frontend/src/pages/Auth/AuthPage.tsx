@@ -10,6 +10,8 @@ import { ROUTE_PATHS } from '../../routes/menuConfig'
 import { colors } from '../../theme/colors'
 import { getErrorMessage } from '../../services/apiClient'
 import { signIn, signUp } from '../../services/AuthService'
+import { authStore } from '../../store/authStore'
+import { getLandingPath } from '../../routes/roleAccess'
 import AuthHero from './AuthHero'
 
 export type AuthMode = 'sign-in' | 'sign-up'
@@ -38,7 +40,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
     try {
       await action()
       messageApi.success(successMessage)
-      navigate(ROUTE_PATHS.dashboard, { replace: true })
+      navigate(getLandingPath(authStore.getState().user?.role), { replace: true })
     } catch (error) {
       messageApi.error(getErrorMessage(error))
     } finally {

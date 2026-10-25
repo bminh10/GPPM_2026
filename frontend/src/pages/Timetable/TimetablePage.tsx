@@ -23,7 +23,6 @@ import {
 import {
   EditOutlined,
   LeftOutlined,
-  ReloadOutlined,
   RightOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
@@ -638,16 +637,6 @@ export default function TimetablePage() {
             disabled={referencesLoading || selectedSemesterId === undefined}
           >
             Tự động xếp lịch
-          </Button>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              void queryClient.invalidateQueries({ queryKey: ['schedules'] })
-              void queryClient.invalidateQueries({ queryKey: ['timetable', 'references'] })
-            }}
-            loading={scheduleLoading || referencesLoading}
-          >
-            Tải lại
           </Button>
         </Space>
       </Flex>

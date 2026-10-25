@@ -288,7 +288,6 @@ export default function AdminUsersPage() {
         title="Tài khoản hiện có"
         extra={
           <Space>
-            <Button onClick={() => void loadUsers()} loading={loading}>Tải lại</Button>
             <Button
               type="primary"
               icon={<UserAddOutlined />}

@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Card, Checkbox, Descriptions, Flex, Input, Tag, Typography } from 'antd'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
-import { useAuth } from '../../store/authStore'
 
 type Job = {
   id: string; uid: string; mssv: string; state: string; detail: string; created_at: number
@@ -21,10 +20,6 @@ const states: Record<string, string> = {
 }
 
 export default function CardWriterPage() {
-  const { user } = useAuth()
-  if (!['admin', 'superadmin'].includes(user?.role?.replace(/\s/g, '').toLowerCase() ?? '')) {
-    return <Alert type="error" showIcon title="Chỉ quản trị viên được cấp thẻ" />
-  }
   return <App><WriterStationPage /></App>
 }
 
@@ -78,7 +73,7 @@ function WriterStationPage() {
   return (
     <Flex vertical gap={16}>
       <Typography.Title level={3}>Cấp thẻ · Ghi MSSV</Typography.Title>
-      <Alert type="warning" showIcon title="Chỉ quản trị · Chỉ thẻ trắng/thẻ mẫu được phép ghi"
+      <Alert type="warning" showIcon title="Chỉ nhân sự được phân quyền · Chỉ thẻ trắng/thẻ mẫu được phép ghi"
         description="Chưa đối chiếu danh sách sinh viên, chưa xác minh hoặc điểm danh. RC522 sẽ kiểm tra loại thẻ và khối 4 trước khi ghi. Không dùng thẻ trường có dữ liệu sẵn." />
       {query.error && <Alert type="error" showIcon title="Không kết nối được API trạm ghi" description={getErrorMessage(query.error)} />}
       <Card title="1. Chạm thẻ lên trạm ghi để xem UID">

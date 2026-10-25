@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Card, Flex, InputNumber, Select, Switch, Table, Typography } from 'antd'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
+import { getAppRole } from '../../routes/roleAccess'
 import { useAuth } from '../../store/authStore'
 
 type Session = {
@@ -15,7 +16,7 @@ const date = (value: number) => new Date(value * 1000).toLocaleString('vi-VN')
 
 export default function AttendancePanel() {
   const { user } = useAuth()
-  if (!['admin', 'superadmin'].includes(user?.role?.replace(/\s/g, '').toLowerCase() ?? '')) return null
+  if (!['admin', 'super_admin', 'technician'].includes(getAppRole(user?.role))) return null
   return <App><AttendanceControls /></App>
 }
 
