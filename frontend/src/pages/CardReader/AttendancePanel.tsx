@@ -92,7 +92,7 @@ function AttendanceControls() {
     onOk: () => mutation.mutateAsync({ path: `/card-attendance/sessions/${current?.id}/close`, payload: {} }),
   })
   return (
-    <Card title="Điểm danh bằng thẻ · Toàn cơ sở">
+    <Card id="reader-attendance-session" title="Điểm danh bằng thẻ · Toàn cơ sở">
       <Flex vertical gap={12}>
         <Alert type="info" showIcon title="Chỉ ghi nhận MSSV đã quét, chưa xác minh danh tính"
           description="Không có bảng sinh viên hay danh sách vắng. Mỗi MSSV chỉ ghi nhận lần đầu trong phiên; lượt sau báo “Đã điểm danh”. Ngoài phiên báo “Đã quá giờ điểm danh”." />
@@ -109,7 +109,7 @@ function AttendanceControls() {
           {current.ends_at ? `Tự kết thúc lúc ${date(current.ends_at)} (giờ server)` : 'Kết thúc thủ công bởi quản trị'}
         </Typography.Text>}
         <Typography.Text>Trạm reader: {status.data?.reader_id ?? 'Chọn cơ sở để xem'}. Chọn cơ sở để xem và bắt đầu phiên:</Typography.Text>
-        <Select aria-label="Cơ sở điểm danh" placeholder="Chọn cơ sở" value={campusId}
+        <Select id="reader-campus-select" aria-label="Cơ sở điểm danh" placeholder="Chọn cơ sở" value={campusId}
           options={campuses.data?.map((item) => ({ value: item.id, label: item.name }))}
           onChange={(value) => { setCampusId(value); setSelected(undefined); setPage(1) }}
           disabled={mutation.isPending} style={{ maxWidth: 440 }} />
@@ -119,14 +119,14 @@ function AttendanceControls() {
         {campuses.data?.length === 0 && <Typography.Text type="warning">
           Chưa có cơ sở trong database. Tạo cơ sở tại Quản lý dữ liệu trước khi mở phiên.
         </Typography.Text>}
-        <Flex gap={12} align="center" wrap>
+        <Flex id="reader-session-duration" gap={12} align="center" wrap>
           <Switch aria-label="Tự kết thúc" checked={timed} onChange={setTimed} disabled={current?.is_open || mutation.isPending} />
           <Typography.Text>Tự kết thúc sau</Typography.Text>
           <InputNumber aria-label="Thời lượng điểm danh (phút)" min={1} max={1440} precision={0}
             value={minutes} onChange={setMinutes} disabled={!timed || current?.is_open || mutation.isPending} />
           <Typography.Text>phút (1–1440); tắt để kết thúc thủ công</Typography.Text>
         </Flex>
-        <Flex gap={12} wrap>
+        <Flex id="reader-session-actions" gap={12} wrap>
           <Button type="primary" onClick={start} loading={mutation.isPending}
             disabled={!status.data || !!status.error || !!campuses.error || current?.is_open || !campusId ||
               (timed && (minutes === null || !Number.isInteger(minutes) || minutes < 1 || minutes > 1440))}>
@@ -136,6 +136,7 @@ function AttendanceControls() {
             Kết thúc điểm danh
           </Button>
         </Flex>
+        <div id="reader-session-history">
         <Typography.Text strong>Lịch sử của cơ sở đã chọn (50 phiên gần nhất)</Typography.Text>
         <Select aria-label="Phiên xem log" placeholder="Chưa có phiên" value={sessionId}
           options={status.data?.sessions.map((item) => ({
@@ -152,6 +153,7 @@ function AttendanceControls() {
           ]}
           pagination={{ current: page, pageSize: 50, total: logs.data?.total ?? 0, showSizeChanger: false, onChange: setPage }}
           locale={{ emptyText: 'Chưa có MSSV được ghi nhận trong phiên' }} />
+        </div>
       </Flex>
     </Card>
   )

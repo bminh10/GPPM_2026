@@ -461,7 +461,7 @@ export default function TimetablePage() {
   )
   const openAutomaticSchedule = async () => {
     if (selectedSemesterId === undefined) {
-      messageApi.error('Vui lòng chọn học kỳ trước khi tự động xếp lịch.')
+      messageApi.error('Vui lòng chọn học kỳ trước khi Lịch thông minh.')
       return
     }
     setAutomaticScheduleLoading(true)
@@ -630,13 +630,14 @@ export default function TimetablePage() {
         </div>
         <Space wrap>
           <Button
+            id="timetable-auto-schedule"
             type="primary"
             icon={<ThunderboltOutlined />}
             onClick={() => void openAutomaticSchedule()}
             loading={automaticScheduleLoading}
             disabled={referencesLoading || selectedSemesterId === undefined}
           >
-            Tự động xếp lịch
+            Lịch thông minh
           </Button>
         </Space>
       </Flex>
@@ -658,7 +659,7 @@ export default function TimetablePage() {
         />
       )}
 
-      <Card>
+      <Card id="timetable-filters">
         <Flex gap={12} wrap="wrap" align="end">
           <div style={{ minWidth: 220, flex: '1 1 220px' }}>
             <Typography.Text strong>Học kỳ</Typography.Text>
@@ -753,6 +754,7 @@ export default function TimetablePage() {
       </Card>
 
       <Card
+        id="timetable-week-view"
         title={
           <Flex align="center" gap={8} wrap="wrap">
             <Button
@@ -832,7 +834,7 @@ export default function TimetablePage() {
         )}
       </Card>
       <Modal
-        title={`Tự động xếp lịch${selectedSemester ? ` · ${selectedSemester.name}` : ''}`}
+        title={`Lịch thông minh${selectedSemester ? ` · ${selectedSemester.name}` : ''}`}
         open={automaticScheduleOpen}
         onCancel={() => {
           setAutomaticScheduleOpen(false)
@@ -929,13 +931,12 @@ export default function TimetablePage() {
             />
             {automaticScheduleCampusId !== undefined && (
               <Typography.Text type="secondary" style={{ display: 'block', marginTop: 6 }}>
-                Cơ sở này có {selectedCampusRooms.length} phòng; solver chỉ sử dụng các phòng
-                thuộc cơ sở đã chọn.
+                Cơ sở này có {selectedCampusRooms.length} phòng;
               </Typography.Text>
             )}
           </div>
           <div>
-            <Typography.Text strong>Phạm vi đăng ký cần phân bổ</Typography.Text>
+            <Typography.Text strong>Phạm vi phân bổ</Typography.Text>
             <Radio.Group
               value={automaticScheduleScope}
               disabled={automaticScheduleIsRunning}
@@ -974,8 +975,6 @@ export default function TimetablePage() {
                   optionFilterProp="label"
                 />
                 <Typography.Text type="secondary">
-                  Hệ thống tự suy ra đăng ký qua lớp → ngành → khoa và chỉ đưa các môn thuộc
-                  khoa đã chọn vào bộ xếp lịch tại cơ sở ở trên.
                   {` Tìm thấy ${scopedSemesterRegistrations.length} đăng ký trong học kỳ.`}
                 </Typography.Text>
               </>
@@ -1008,11 +1007,11 @@ export default function TimetablePage() {
               />
             )}
           </div>
-          <Typography.Text>
+          {/* <Typography.Text>
             Mỗi đăng ký được xếp lịch cố định hằng tuần trong học kỳ. Môn được cấu hình là thực
             hành sẽ có một lịch lý thuyết và một lịch thực hành riêng; lịch thực hành dùng phòng
             thực hành, còn lịch lý thuyết dùng phòng thường.
-          </Typography.Text>
+          </Typography.Text> */}
           <Typography.Text type="secondary">
             Nếu đăng ký trong phạm vi chọn đang có lịch tương lai ở cơ sở khác, lịch đó sẽ được
             thay bằng lịch tại cơ sở đã chọn.

@@ -13,7 +13,7 @@ export default function MainLayout() {
       <AppSider collapsed={collapsed} onCollapse={setCollapsed} />
       <Layout>
         <AppHeader collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
-        <Layout.Content style={{ margin: 16 }}>
+        <Layout.Content id="app-page-tour" style={{ margin: 16 }}>
           <Outlet />
         </Layout.Content>
         <AppFooter />

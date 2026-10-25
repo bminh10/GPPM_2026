@@ -414,6 +414,7 @@ export default function CourseRegistrationTab() {
     <Space direction="vertical" size="large" style={{ display: 'flex' }}>
       {contextHolder}
       <Card
+        id="registration-csv-import"
         title="Nhập đăng ký môn học bằng CSV"
         extra={
           <Button icon={<DownloadOutlined />} onClick={downloadTemplate}>
@@ -508,6 +509,7 @@ export default function CourseRegistrationTab() {
       </Card>
 
       <Card
+        id="registration-list"
         title="Danh sách đăng ký môn học"
       >
         {loadError ? (
@@ -519,6 +521,7 @@ export default function CourseRegistrationTab() {
         ) : (
           <Space direction="vertical" size="middle" style={{ display: 'flex' }}>
             <SearchFilterSelect
+              id="registration-semester-filter"
               aria-label="Chọn học kỳ đăng ký môn học"
               value={selectedSemesterKey}
               options={semesterOptions}

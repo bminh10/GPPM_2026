@@ -97,7 +97,7 @@ export default function AuditLogsPage() {
           Theo dõi tối đa {LOG_LIMIT} hoạt động gần nhất.
         </Typography.Text>
       </div>
-      <Card title="Lịch sử hoạt động">
+      <Card id="audit-log-table" title="Lịch sử hoạt động">
         {error && (
           <Alert
             type="error"

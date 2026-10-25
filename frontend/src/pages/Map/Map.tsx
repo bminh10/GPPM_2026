@@ -124,7 +124,7 @@ export default function Map() {
       {referenceError && (
         <Alert type="error" showIcon title="Không tải được dữ liệu cơ sở" description={referenceError} />
       )}
-      <Card size="small">
+      <Card id="map-date-filters" size="small">
         <Flex align="center" justify="space-between" gap={16} wrap>
           <Flex align="center" gap={8}>
             <Typography.Text strong>Học kỳ:</Typography.Text>
@@ -481,6 +481,7 @@ function CampusView({
       </Flex>
 
       <Flex
+        id="map-navigation"
         vertical
         gap={12}
         style={{ position: 'absolute', top: 16, left: 16, bottom: 16, width: 300, zIndex: 2 }}
@@ -497,14 +498,18 @@ function CampusView({
             />
           </Card>
         )}
-        <BuildingSelector buildings={buildings} value={buildingId} onChange={selectBuilding} onReset={selectNone} />
-        <RoomListPanel
-          rooms={rooms}
-          buildings={buildings}
-          scheduledRoomNames={scheduledRoomNames}
-          selectedRoomId={roomId}
-          onSelectRoom={selectRoom}
-        />
+        <div id="map-building-selector">
+          <BuildingSelector buildings={buildings} value={buildingId} onChange={selectBuilding} onReset={selectNone} />
+        </div>
+        <div id="map-room-list">
+          <RoomListPanel
+            rooms={rooms}
+            buildings={buildings}
+            scheduledRoomNames={scheduledRoomNames}
+            selectedRoomId={roomId}
+            onSelectRoom={selectRoom}
+          />
+        </div>
       </Flex>
 
       {building && (
@@ -514,7 +519,7 @@ function CampusView({
       )}
 
       {selectedRoom && (
-        <Flex style={{ position: 'absolute', right: 84, bottom: 16, width: 350, maxHeight: 'calc(100% - 32px)', overflowY: 'auto', zIndex: 2 }}>
+        <Flex id="map-room-details" style={{ position: 'absolute', right: 84, bottom: 16, width: 350, maxHeight: 'calc(100% - 32px)', overflowY: 'auto', zIndex: 2 }}>
           <RoomDetailCard
             room={selectedRoom}
             buildingName={building?.name ?? ''}

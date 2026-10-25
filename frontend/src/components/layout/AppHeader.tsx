@@ -1,9 +1,10 @@
 import { Button, Flex, Layout, Space } from 'antd'
-import { LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { BookOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { ROUTE_PATHS } from '../../routes/menuConfig'
 import { logOut } from '../../services/AuthService'
 import UserMenu from './UserMenu'
+import PageHelpTour from './PageHelpTour'
 
 type AppHeaderProps = {
   collapsed: boolean
@@ -12,6 +13,7 @@ type AppHeaderProps = {
 
 export default function AppHeader({ collapsed, onToggle }: AppHeaderProps) {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
 
   const handleLogout = async () => {
     await logOut().catch(() => undefined)
@@ -20,6 +22,7 @@ export default function AppHeader({ collapsed, onToggle }: AppHeaderProps) {
 
   return (
     <Layout.Header
+      id="app-header-tour"
       style={{
         position: 'sticky',
         top: 0,
@@ -37,6 +40,15 @@ export default function AppHeader({ collapsed, onToggle }: AppHeaderProps) {
           onClick={onToggle}
         />
         <Space>
+          <PageHelpTour key={pathname} pathname={pathname} />
+          <Button
+            type="text"
+            icon={<BookOutlined />}
+            id="app-documentation-tour"
+            onClick={() => navigate(ROUTE_PATHS.documentation)}
+          >
+            Tài liệu
+          </Button>
           <UserMenu />
           <Button type="text" icon={<LogoutOutlined />} onClick={handleLogout}>
             Đăng xuất

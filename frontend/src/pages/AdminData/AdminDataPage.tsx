@@ -761,6 +761,7 @@ export default function AdminDataPage() {
         <Space direction="vertical" size={16} style={{ display: 'flex' }}>
           <Typography.Title level={5} style={{ margin: 0 }}>Chọn loại dữ liệu</Typography.Title>
           <SearchFilterSelect
+            id="data-entity-selector"
             value={selectedKey}
             disabled={csvImporting}
             onChange={(value: EntityKey) => {
@@ -785,11 +786,11 @@ export default function AdminDataPage() {
         </Space>
       </Card>
 
-      <Row gutter={[16, 16]} align="top">
+      <Row id="data-actions" gutter={[16, 16]} align="top">
         {!entity.readOnly && (
         <Col xs={24} xl={9}>
           <Space direction="vertical" size={16} style={{ display: 'flex' }}>
-            <Card title={`Tạo ${entity.label.toLowerCase()}`}>
+            <Card id="data-create-form" title={`Tạo ${entity.label.toLowerCase()}`}>
               {optionsError && <Alert type="error" showIcon message={optionsError} style={{ marginBottom: 16 }} />}
               <Form
                 key={selectedKey}
@@ -810,6 +811,7 @@ export default function AdminDataPage() {
               </Form>
             </Card>
             <Card
+              id="data-csv-import"
               title="Tạo hàng loạt từ CSV"
               extra={
                 <Button icon={<DownloadOutlined />} onClick={downloadCsvTemplate}>
@@ -900,6 +902,7 @@ export default function AdminDataPage() {
         )}
         <Col xs={24} xl={entity.readOnly ? 24 : 15}>
           <Card
+            id="data-record-list"
             title={`Danh sách ${entity.label.toLowerCase()}`}
           >
             {loadError ? (

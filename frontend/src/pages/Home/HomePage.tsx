@@ -7,8 +7,8 @@ import {
   EnvironmentOutlined,
   IdcardOutlined,
   RightOutlined,
-  SmileOutlined,
   TeamOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons'
 import { Button, Card, Carousel, Col, Flex, Row, Typography } from 'antd'
 import { useNavigate } from 'react-router-dom'
@@ -70,7 +70,7 @@ function getActions(role: AppRole): HomeAction[] {
       label: 'Danh mục hệ thống',
       description: 'Tra cứu và quản lý danh mục dữ liệu.',
       path: ROUTE_PATHS.dataManagement,
-      icon: <DatabaseOutlined />,
+      icon: <AppstoreOutlined />,
       color: '#2563eb',
     },
     {
@@ -131,6 +131,7 @@ export default function HomePage() {
       <Typography.Text style={{ fontSize: 30}}>
         <HandIcon /> Xin chào{user?.user_name ? `, ${user.user_name}` : ''}. Chọn chức năng để bắt đầu.
       </Typography.Text>
+      <div id="home-carousel">
       <Carousel autoplay autoplaySpeed={3000} dots effect="fade">
         {slides.map((slide) => (
           <div key={slide.title}>
@@ -175,8 +176,9 @@ export default function HomePage() {
           </div>
         ))}
       </Carousel>
+      </div>
 
-      <section>
+      <section id="home-actions">
         <Flex justify="space-between" align="end" wrap="wrap" gap={8} style={{ marginBottom: 16 }}>
           <div>
             <Typography.Title level={3} style={{ margin: 0 }}>Chức năng</Typography.Title>

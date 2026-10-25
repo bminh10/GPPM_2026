@@ -19,6 +19,7 @@ export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
 
   return (
     <Layout.Sider
+      id="app-sidebar-tour"
       collapsible
       collapsed={collapsed}
       onCollapse={onCollapse}

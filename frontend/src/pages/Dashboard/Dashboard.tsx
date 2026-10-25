@@ -64,128 +64,36 @@ type UnderutilizedRoomsResponse = {
   rooms: RoomUtilization[]
 }
 
-type MajorOption = { id: number; name: string }
-type ClassOption = { id: number; name: string; nganh_id: number }
 type SemesterOption = { id: number; name: string; start_date: string; end_date: string }
-type WeekOption = { start_date: string; end_date: string; label: string }
-type CampusOption = { id: number; name: string }
-type RoomOption = { id: number; building: string | null; campus_id: number }
 
-const EMPTY_MAJORS: MajorOption[] = []
-const EMPTY_CLASSES: ClassOption[] = []
 const EMPTY_SEMESTERS: SemesterOption[] = []
-const EMPTY_CAMPUSES: CampusOption[] = []
-const EMPTY_ROOMS: RoomOption[] = []
 const dayNames = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('vi-VN').format(new Date(`${value}T00:00:00`))
 }
 
-function toDateString(value: Date) {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function getWeeks(semester: SemesterOption | undefined): WeekOption[] {
-  if (!semester) return []
-  const semesterStart = new Date(`${semester.start_date}T00:00:00`)
-  const semesterEnd = new Date(`${semester.end_date}T00:00:00`)
-  const cursor = new Date(semesterStart)
-  cursor.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7))
-  const weeks: WeekOption[] = []
-
-  while (cursor <= semesterEnd) {
-    const weekStart = new Date(Math.max(cursor.getTime(), semesterStart.getTime()))
-    const sunday = new Date(cursor)
-    sunday.setDate(sunday.getDate() + 6)
-    const weekEnd = new Date(Math.min(sunday.getTime(), semesterEnd.getTime()))
-    weeks.push({
-      start_date: toDateString(weekStart),
-      end_date: toDateString(weekEnd),
-      label: `${formatDate(toDateString(weekStart))} – ${formatDate(toDateString(weekEnd))}`,
-    })
-    cursor.setDate(cursor.getDate() + 7)
-  }
-
-  return weeks
-}
-
 export default function Dashboard() {
   const queryClient = useQueryClient()
-  const [filters, setFilters] = useState<{
-    majorId: number | null
-    classId: number | null
-    semesterId: number | null
-    week: WeekOption | null
-    campusId: number | null | undefined
-    building: string | null
-  }>({ majorId: null, classId: null, semesterId: null, week: null, campusId: undefined, building: null })
+  const [semesterId, setSemesterId] = useState<number | null>(null)
   const referencesQuery = useQuery({
     queryKey: ['dashboard', 'references'],
-    queryFn: async () => {
-      const [majorsResponse, classesResponse, semestersResponse, campusesResponse, roomsResponse] =
-        await Promise.all([
-          apiClient.get<MajorOption[]>('/majors'),
-          apiClient.get<ClassOption[]>('/classes'),
-          apiClient.get<SemesterOption[]>('/semesters'),
-          apiClient.get<CampusOption[]>('/campus/all'),
-          apiClient.get<RoomOption[]>('/rooms'),
-        ])
-      return {
-        majors: majorsResponse.data,
-        classes: classesResponse.data,
-        semesters: semestersResponse.data,
-        campuses: campusesResponse.data,
-        rooms: roomsResponse.data,
-      }
-    },
+    queryFn: async () => (await apiClient.get<SemesterOption[]>('/semesters')).data,
   })
-  const majors = referencesQuery.data?.majors ?? EMPTY_MAJORS
-  const classes = referencesQuery.data?.classes ?? EMPTY_CLASSES
-  const semesters = referencesQuery.data?.semesters ?? EMPTY_SEMESTERS
-  const campuses = referencesQuery.data?.campuses ?? EMPTY_CAMPUSES
-  const rooms = referencesQuery.data?.rooms ?? EMPTY_ROOMS
+  const semesters = referencesQuery.data ?? EMPTY_SEMESTERS
   const filtersLoading = referencesQuery.isLoading
   const filtersError = referencesQuery.error
     ? getErrorMessage(referencesQuery.error)
     : null
 
-  const campusesWithRooms = useMemo(
-    () => campuses.filter((campus) => rooms.some((room) => room.campus_id === campus.id)),
-    [campuses, rooms],
-  )
-  const campusId = filters.campusId === undefined
-    ? campusesWithRooms[0]?.id ?? null
-    : filters.campusId
-  const selectedSemester = semesters.find((semester) => semester.id === filters.semesterId)
-  const availableBuildings = useMemo(
-    () => [...new Set(rooms
-      .filter((room) => campusId === null || room.campus_id === campusId)
-      .map((room) => room.building)
-      .filter((building): building is string => Boolean(building)))].sort(),
-    [campusId, rooms],
-  )
-  const weeks = useMemo(() => getWeeks(selectedSemester), [selectedSemester])
-  const availableClasses = useMemo(
-    () => classes.filter((schoolClass) => filters.majorId === null || schoolClass.nganh_id === filters.majorId),
-    [classes, filters.majorId],
-  )
+  const selectedSemester = semesters.find((semester) => semester.id === semesterId)
 
   const analyticsParams = useMemo(() => ({
-    ...(filters.classId !== null ? { lop_id: filters.classId } : {}),
-    ...(filters.majorId !== null ? { nganh_id: filters.majorId } : {}),
-    ...(filters.semesterId !== null ? { hoc_ky_id: filters.semesterId } : {}),
-    ...(campusId !== null ? { campus_id: campusId } : {}),
-    ...(filters.building !== null ? { building: filters.building } : {}),
-    ...(filters.week
-      ? { start_date: filters.week.start_date, end_date: filters.week.end_date }
-      : selectedSemester
-        ? { start_date: selectedSemester.start_date, end_date: selectedSemester.end_date }
-        : {}),
-  }), [campusId, filters, selectedSemester])
+    ...(semesterId !== null ? { hoc_ky_id: semesterId } : {}),
+    ...(selectedSemester
+      ? { start_date: selectedSemester.start_date, end_date: selectedSemester.end_date }
+      : {}),
+  }), [semesterId, selectedSemester])
 
   const analyticsQuery = useQuery({
     queryKey: ['analytics', analyticsParams],
@@ -213,10 +121,6 @@ export default function Dashboard() {
     void queryClient.invalidateQueries({ queryKey: ['analytics'] })
   }
 
-  const updateFilters = (updates: Partial<typeof filters>) => {
-    setFilters((current) => ({ ...current, ...updates }))
-  }
-
   const averageUtilization = useMemo(() => {
     if (!utilization?.rooms.length) return 0
     return (
@@ -232,7 +136,7 @@ export default function Dashboard() {
       axisPointer: { type: 'shadow' },
       valueFormatter: (value: unknown) => `${Number(value).toFixed(1)}%`,
     },
-    grid: { left: 16, right: 32, top: 12, bottom: 88, containLabel: true },
+    grid: { left: 16, right: 32, top: 12, bottom: 112, containLabel: true },
     yAxis: {
       type: 'value',
       max: 100,
@@ -245,12 +149,13 @@ export default function Dashboard() {
       axisTick: { show: false },
       axisLine: { show: false },
       axisLabel: {
-        interval: 0,
-        rotate: 35,
-        hideOverlap: false,
-        fontSize: 10,
-        width: 110,
-        overflow: 'break',
+        interval: 'auto',
+        rotate: 45,
+        hideOverlap: true,
+        fontSize: 11,
+        margin: 14,
+        width: 90,
+        overflow: 'truncate',
       },
     },
     series: [
@@ -360,7 +265,7 @@ export default function Dashboard() {
         <div className="dashboard-hero-decoration" aria-hidden="true" />
       </section>
 
-      <Card className="dashboard-filter-panel">
+      <Card id="dashboard-filters" className="dashboard-filter-panel">
         <Flex vertical gap={16}>
           <Flex align="center" justify="space-between" wrap="wrap" gap={12}>
             <Flex align="center" gap={12}>
@@ -368,76 +273,13 @@ export default function Dashboard() {
               <div className="dashboard-filter-heading">
                 <Typography.Text strong>Bộ lọc dữ liệu</Typography.Text>
                 <Typography.Text type="secondary">
-                  Tùy chỉnh phạm vi báo cáo theo cơ sở, lớp học và thời gian
+                  Chọn học kỳ để cập nhật phạm vi báo cáo
                 </Typography.Text>
               </div>
             </Flex>
-            <span className="dashboard-filter-hint">Các biểu đồ và chỉ số sẽ được cập nhật theo bộ lọc</span>
+            <span className="dashboard-filter-hint">Các biểu đồ và chỉ số sẽ được cập nhật theo học kỳ</span>
           </Flex>
           <Space wrap className="dashboard-filter-controls" size={[12, 12]}>
-            <SearchFilterSelect
-              aria-label="Lọc theo cơ sở"
-              placeholder="Tất cả cơ sở"
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              loading={filtersLoading}
-              style={{ width: 220 }}
-              value={campusId ?? undefined}
-              options={campusesWithRooms.map((campus) => ({ value: campus.id, label: campus.name }))}
-              onChange={(campusId: number | undefined) =>
-                updateFilters({
-                  campusId: campusId ?? null,
-                  building: null,
-                })
-              }
-            />
-            <SearchFilterSelect
-              aria-label="Lọc theo tòa"
-              placeholder="Tất cả tòa"
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              disabled={availableBuildings.length === 0}
-              style={{ width: 200 }}
-              value={filters.building ?? undefined}
-              options={availableBuildings.map((building) => ({ value: building, label: building }))}
-              onChange={(building: string | undefined) =>
-                updateFilters({ building: building ?? null })
-              }
-            />
-            <SearchFilterSelect
-              aria-label="Lọc theo ngành"
-              placeholder="Tất cả ngành"
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              loading={filtersLoading}
-              style={{ width: 220 }}
-              value={filters.majorId ?? undefined}
-              options={majors.map((major) => ({ value: major.id, label: major.name }))}
-              onChange={(majorId: number | undefined) =>
-                updateFilters({
-                  majorId: majorId ?? null,
-                  classId: null,
-                })
-              }
-            />
-            <SearchFilterSelect
-              aria-label="Lọc theo lớp"
-              placeholder="Tất cả lớp"
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              loading={filtersLoading}
-              style={{ width: 220 }}
-              value={filters.classId ?? undefined}
-              options={availableClasses.map((schoolClass) => ({
-                value: schoolClass.id,
-                label: schoolClass.name,
-              }))}
-              onChange={(classId: number | undefined) => updateFilters({ classId: classId ?? null })}
-            />
             <SearchFilterSelect
               aria-label="Lọc theo học kỳ"
               placeholder="Tất cả học kỳ"
@@ -445,24 +287,10 @@ export default function Dashboard() {
               showSearch
               optionFilterProp="label"
               loading={filtersLoading}
-              style={{ width: 220 }}
-              value={filters.semesterId ?? undefined}
+              style={{ width: 320, maxWidth: '100%' }}
+              value={semesterId ?? undefined}
               options={semesters.map((semester) => ({ value: semester.id, label: semester.name }))}
-              onChange={(semesterId: number | undefined) =>
-                updateFilters({ semesterId: semesterId ?? null, week: null })
-              }
-            />
-            <SearchFilterSelect
-              aria-label="Lọc theo tuần"
-              placeholder="Chọn tuần"
-              allowClear
-              disabled={filters.semesterId === null}
-              style={{ width: 260 }}
-              value={filters.week?.start_date}
-              options={weeks.map((week) => ({ value: week.start_date, label: week.label }))}
-              onChange={(startDate: string | undefined) =>
-                updateFilters({ week: weeks.find((week) => week.start_date === startDate) ?? null })
-              }
+              onChange={(value: number | undefined) => setSemesterId(value ?? null)}
             />
           </Space>
         </Flex>
@@ -492,7 +320,7 @@ export default function Dashboard() {
       )}
 
       <Spin spinning={loading && !utilization}>
-        <Row gutter={[16, 16]}>
+        <Row id="dashboard-statistics" gutter={[16, 16]}>
           <Col xs={24} sm={12} xl={6}>
             <Card className="dashboard-stat-card">
               <div className="dashboard-stat-heading">
@@ -553,16 +381,14 @@ export default function Dashboard() {
               <Row gutter={[16, 16]}>
                 <Col xs={24} xl={12}>
                   <Card
+                    id="dashboard-utilization"
                     className="dashboard-panel"
                     title={<div className="dashboard-panel-title">
                       <span className="dashboard-panel-icon"><ApartmentOutlined /></span>
                       <div>
                         <Typography.Text strong>Tỷ lệ sử dụng theo phòng</Typography.Text>
                         <Typography.Text type="secondary">
-                          {[
-                            campusesWithRooms.find((campus) => campus.id === campusId)?.name,
-                            filters.building,
-                          ].filter(Boolean).join(' · ') || 'Tất cả cơ sở và tòa nhà'}
+                          {selectedSemester?.name ?? 'Tất cả học kỳ'}
                         </Typography.Text>
                       </div>
                     </div>}
@@ -581,6 +407,7 @@ export default function Dashboard() {
               <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
                 <Col span={24}>
                   <Card
+                    id="dashboard-demand"
                     className="dashboard-panel"
                     title={<div className="dashboard-panel-title">
                       <span className="dashboard-panel-icon"><ScheduleOutlined /></span>
@@ -599,12 +426,13 @@ export default function Dashboard() {
                 </Col>
                 <Col span={24}>
                   <Card
+                    id="dashboard-underused"
                     className="dashboard-panel dashboard-panel-warning"
                     title={<div className="dashboard-panel-title">
                       <span className="dashboard-panel-icon dashboard-panel-icon-warning"><WarningOutlined /></span>
                       <div>
                         <Typography.Text strong>Phòng có tỷ lệ sử dụng thấp</Typography.Text>
-                        <Typography.Text type="secondary">Danh sách phòng dưới ngưỡng sử dụng hiện tại</Typography.Text>
+                        {/* <Typography.Text type="secondary">Danh sách phòng dưới ngưỡng sử dụng hiện tại</Typography.Text> */}
                       </div>
                     </div>}
                   >

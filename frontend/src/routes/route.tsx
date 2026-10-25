@@ -15,6 +15,7 @@ import AdminUsersPage from '../pages/AdminUsers/AdminUsersPage'
 import BuildingGeoJSONTest from '../pages/Map3DTest/BuildingGeoJSONTest'
 import CardReaderPage from '../pages/CardReader/CardReaderPage'
 import CardWriterPage from '../pages/CardWriter/CardWriterPage'
+import DocumentationPage from '../pages/Documentation/DocumentationPage'
 
 const adminRoles: AppRole[] = ['super_admin', 'admin']
 const dashboardRoles: AppRole[] = ['super_admin', 'admin', 'technician']
@@ -32,6 +33,7 @@ export const route = createBrowserRouter([
         element: <MainLayout />,
         children: [
           { path: ROUTE_PATHS.home, element: <HomePage /> },
+          { path: ROUTE_PATHS.documentation, element: <DocumentationPage /> },
           {
             path: ROUTE_PATHS.dashboard,
             element: <RoleRoute roles={dashboardRoles}><Dashboard /></RoleRoute>,

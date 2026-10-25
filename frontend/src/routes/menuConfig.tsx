@@ -1,5 +1,5 @@
 import {
-    AppstoreOutlined,
+  AppstoreOutlined,
   AuditOutlined,
   CalendarOutlined,
   DashboardOutlined,
@@ -25,6 +25,7 @@ export const ROUTE_PATHS = {
   userManagement: '/admin/users',
   auditLogs: '/admin/logs',
   profile: '/profile',
+  documentation: '/guide',
   signIn: '/sign-in',
   signUp: '/sign-up',
 } as const
@@ -40,8 +41,8 @@ export function getMenuItems(role: AppRole): AppMenuItem[] {
         icon: <DatabaseOutlined />,
         label: 'Quản lý dữ liệu',
         children: [
-          { key: ROUTE_PATHS.dataManagement,icon: <AppstoreOutlined />, label: 'Danh mục hệ thống' },
-          { key: ROUTE_PATHS.courseRegistrations,icon: <EditOutlined />, label: 'Đăng ký môn học' },
+          { key: ROUTE_PATHS.dataManagement, icon: <AppstoreOutlined />, label: 'Danh mục hệ thống' },
+          { key: ROUTE_PATHS.courseRegistrations, icon: <EditOutlined />, label: 'Đăng ký môn học' },
           { key: ROUTE_PATHS.timetable, icon: <CalendarOutlined />, label: 'Thời khóa biểu' },
         ],
       },
