@@ -1,9 +1,0 @@
-{
-  "deviceId": "esp32-cs1-v404",
-  "campusId": "CS1",
-  "roomId": "V404",
-  "lightIds": [
-    "light-1",
-    "light-2"
-  ]
-}

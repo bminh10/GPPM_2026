@@ -22,10 +22,16 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 load_dotenv()
 
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+SQLALCHEMY_DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip().strip("\"'")
 
 if not SQLALCHEMY_DATABASE_URL:
     raise ValueError("LỖI: Chưa cấu hình DATABASE_URL trong file .env hoặc hệ thống!")
+
+# SQLAlchemy 2.1 defaults postgresql:// to psycopg v3; this project ships psycopg2.
+for _prefix in ("postgres://", "postgresql://", "postgresql+psycopg://"):
+    if SQLALCHEMY_DATABASE_URL.startswith(_prefix):
+        SQLALCHEMY_DATABASE_URL = "postgresql+psycopg2://" + SQLALCHEMY_DATABASE_URL[len(_prefix):]
+        break
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
