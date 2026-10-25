@@ -9,6 +9,8 @@ import {
   IdcardOutlined,
   TeamOutlined,
   EditOutlined,
+  EditFilled,
+  BankFilled
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import type { AppRole } from './roleAccess'
@@ -80,8 +82,8 @@ export function getMenuItems(role: AppRole): AppMenuItem[] {
         icon: <DatabaseOutlined />,
         label: 'Quản lý dữ liệu',
         children: [
-          { key: ROUTE_PATHS.dataManagement, label: 'Danh mục hệ thống' },
-          { key: ROUTE_PATHS.courseRegistrations, label: 'Đăng ký môn học' },
+          { key: ROUTE_PATHS.dataManagement,icon: <AppstoreOutlined />, label: 'Danh mục hệ thống' },
+          { key: ROUTE_PATHS.courseRegistrations, icon:<EditFilled />, label: 'Đăng ký môn học' },
           { key: ROUTE_PATHS.timetable, icon: <CalendarOutlined />, label: 'Thời khóa biểu' },
           { key: ROUTE_PATHS.userManagement, icon: <TeamOutlined />, label: 'Tài khoản' },
         ],
@@ -91,7 +93,7 @@ export function getMenuItems(role: AppRole): AppMenuItem[] {
         icon: <EnvironmentOutlined />,
         label: 'Quản lý hạ tầng',
         children: [
-          { key: ROUTE_PATHS.map, label: 'Sơ đồ' },
+          { key: ROUTE_PATHS.map, label: 'Sơ đồ', icon: <BankFilled /> },
           {
             key: 'electronic-card',
             icon: <IdcardOutlined />,

@@ -286,7 +286,8 @@ export default function AdminUsersPage() {
 
       <Card
         id="users-list"
-        title="Tài khoản hiện có"
+        title={<Typography.Text strong style={{ color: '#164d6b', fontSize: 14 }}>Tài khoản hiện có</Typography.Text>}
+        styles={{ header: { background: 'linear-gradient(105deg, #eaf4fb, #f7fbfe)', borderBottomColor: '#dbe9f3' } }}
         extra={
           <Space>
             <Button

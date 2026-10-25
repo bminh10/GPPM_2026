@@ -35,7 +35,7 @@ export default function RoomListPanel({
       className="glass"
       size="small"
       title="Danh sách phòng"
-      style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+      style={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column' }}
       styles={{
         body: { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' },
       }}
@@ -45,7 +45,12 @@ export default function RoomListPanel({
         value={query}
         onChange={setQuery}
       />
-      <Flex vertical gap={8} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+      <Flex
+        vertical
+        gap={8}
+        onWheel={(event) => event.stopPropagation()}
+        style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehaviorY: 'contain' }}
+      >
         {filtered.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có phòng" />}
         {filtered.map((room) => {
           const hasSchedule = scheduledRoomNames.some(

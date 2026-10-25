@@ -431,7 +431,7 @@ export default function BuildingGeoJSONTest() {
           <Card
             size="small"
             title={
-              <Flex align="center" gap={8}>
+              <Flex align='center' gap={100}>
                 <Typography.Text strong>{selectedRoom.code}</Typography.Text>
                 <Tag color={roomState(selectedRoom).color}>{roomState(selectedRoom).label}</Tag>
               </Flex>

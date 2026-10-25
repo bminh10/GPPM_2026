@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Card, Descriptions, Flex, Tag, Typography } from 'antd'
+import { ScanOutlined } from '@ant-design/icons'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
 import AttendancePanel from './AttendancePanel'
 
@@ -50,12 +51,28 @@ export default function CardReaderPage() {
   const scan = data?.scan
   return (
     <Flex vertical gap={16}>
-      <Typography.Title level={3}>Đọc thẻ</Typography.Title>
-      <Alert showIcon type="info" title="Đọc MSSV và điểm danh theo phiên · Chưa xác minh danh tính sinh viên"
-        description="Chỉ thêm log điểm danh khi có phiên đang mở tại cơ sở. Không ghi hoặc thay đổi thẻ. Dấu chấm trong bản xem ASCII đại diện byte không in được." />
+      <div>
+        <Typography.Title level={3} style={{ marginBottom: 4 }}>Đọc thẻ</Typography.Title>
+        <Typography.Text type="secondary">
+          Đọc mã số sinh viên và theo dõi điểm danh bằng thẻ.
+        </Typography.Text>
+      </div>
       <AttendancePanel />
       {error && <Alert showIcon type="error" title="Không tải được dữ liệu đầu đọc" description={error} />}
-      <Card id="reader-latest-scan" title={data ? `Trạm ${data.reader_id}` : 'Đang kết nối API'}>
+      <Card
+        id="reader-latest-scan"
+        title={
+          <Flex align="center" gap={12}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 11, background: '#d6eaf6', color: '#12658d', fontSize: 17 }}>
+              <ScanOutlined />
+            </span>
+            <Typography.Text strong style={{ color: '#164d6b', fontSize: 14 }}>
+              {data ? `Trạm ${data.reader_id}` : 'Đang kết nối API'}
+            </Typography.Text>
+          </Flex>
+        }
+        styles={{ header: { background: 'linear-gradient(105deg, #eaf4fb, #f7fbfe)', borderBottomColor: '#dbe9f3' } }}
+      >
         {!scan ? (
           <Typography.Paragraph>Chưa nhận được lần quét nào. Vui lòng mở đầu đọc và chạm thẻ.</Typography.Paragraph>
         ) : (
@@ -66,10 +83,15 @@ export default function CardReaderPage() {
               description={scan.attendance.campus_name
                 ? `Cơ sở: ${scan.attendance.campus_name}. Kết quả của lần quét gần nhất, không phải trạng thái phiên hiện tại.`
                 : 'Chưa có phiên điểm danh. Đây là kết quả của lần quét gần nhất.'} />}
-            <Card id="reader-scan-mssv" size="small" title="Mã số sinh viên trên thẻ">
+            <Card
+              id="reader-scan-mssv"
+              size="small"
+              title={<Typography.Text strong style={{ color: '#164d6b' }}>Mã số sinh viên trên thẻ</Typography.Text>}
+              styles={{ header: { background: 'linear-gradient(105deg, #eaf4fb, #f7fbfe)', borderBottomColor: '#dbe9f3' } }}
+            >
               {scan.mssv ? (
-                <Typography.Title level={2} style={{ margin: 0 }}>
-                  <Typography.Text copyable>{scan.mssv}</Typography.Text>
+                <Typography.Title level={2} style={{ margin: 0, color: '#12658d' }}>
+                  <Typography.Text copyable style={{ color: '#12658d' }}>{scan.mssv}</Typography.Text>
                 </Typography.Title>
               ) : (
                 <Typography.Text type="warning">

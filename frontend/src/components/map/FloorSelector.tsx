@@ -13,10 +13,7 @@ export default function FloorSelector({ floors, value, onChange }: Props) {
   }))
 
   return (
-    <Card className="glass" size="small" styles={{ body: { padding: 6, textAlign: 'center' } }}>
-      <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-        Tầng
-      </Typography.Text>
+    <Card className="glass" size="small" styles={{ body: { padding: 6, textAlign: 'center' } }} title="Tầng">
       <Segmented vertical value={value} onChange={(v) => onChange(Number(v))} options={options} />
     </Card>
   )

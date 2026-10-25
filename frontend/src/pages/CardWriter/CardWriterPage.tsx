@@ -72,11 +72,20 @@ function WriterStationPage() {
   }
   return (
     <Flex vertical gap={16}>
-      <Typography.Title level={3}>Cấp thẻ · Ghi MSSV</Typography.Title>
+      <div>
+        <Typography.Title level={3} style={{ marginBottom: 4 }}>Cấp thẻ · Ghi MSSV</Typography.Title>
+        <Typography.Text type="secondary">
+          Ghi mã số sinh viên lên thẻ trắng hoặc thẻ mẫu được phép sử dụng.
+        </Typography.Text>
+      </div>
       <Alert type="warning" showIcon title="Chỉ nhân sự được phân quyền · Chỉ thẻ trắng/thẻ mẫu được phép ghi"
         description="Chưa đối chiếu danh sách sinh viên, chưa xác minh hoặc điểm danh. RC522 sẽ kiểm tra loại thẻ và khối 4 trước khi ghi. Không dùng thẻ trường có dữ liệu sẵn." />
       {query.error && <Alert type="error" showIcon title="Không kết nối được API trạm ghi" description={getErrorMessage(query.error)} />}
-      <Card id="writer-card-status" title="1. Chạm thẻ lên trạm ghi để xem UID">
+      <Card
+        id="writer-card-status"
+        title={<Typography.Text strong style={{ color: '#164d6b' }}>1. Chạm thẻ lên trạm ghi để xem UID</Typography.Text>}
+        styles={{ header: { background: 'linear-gradient(105deg, #eaf4fb, #f7fbfe)', borderBottomColor: '#dbe9f3' } }}
+      >
         <Tag color={!query.error && data?.online ? 'green' : 'default'}>
           {!query.error && data?.online ? 'Writer đang liên lạc' : 'Chưa có kết nối writer được xác nhận'}
         </Tag>
@@ -87,7 +96,11 @@ function WriterStationPage() {
           { key: 'time', label: 'Nhận diện lúc', children: data?.seen_at ? new Date(data.seen_at * 1000).toLocaleString('vi-VN') : 'Chưa có' },
         ]} />
       </Card>
-      <Card id="writer-authorization-form" title="2. Nhập MSSV, xác nhận rồi chạm lại đúng thẻ">
+      <Card
+        id="writer-authorization-form"
+        title={<Typography.Text strong style={{ color: '#164d6b' }}>2. Nhập MSSV, xác nhận rồi chạm lại đúng thẻ</Typography.Text>}
+        styles={{ header: { background: 'linear-gradient(105deg, #eaf4fb, #f7fbfe)', borderBottomColor: '#dbe9f3' } }}
+      >
         <Flex vertical gap={12}>
           <Typography.Text>MSSV gồm 10 chữ số, bắt đầu bằng 245101. Không tự tăng số hay gán sinh viên.</Typography.Text>
           <Input id="writer-mssv-input" aria-label="MSSV cần ghi" placeholder="245101xxxx" maxLength={10}
@@ -110,7 +123,11 @@ function WriterStationPage() {
           </Button>
         </Flex>
       </Card>
-      {job && <Card id="writer-job-result" title="Kết quả lệnh ghi gần nhất">
+      {job && <Card
+        id="writer-job-result"
+        title={<Typography.Text strong style={{ color: '#164d6b' }}>Kết quả lệnh ghi gần nhất</Typography.Text>}
+        styles={{ header: { background: 'linear-gradient(105deg, #eaf4fb, #f7fbfe)', borderBottomColor: '#dbe9f3' } }}
+      >
         <Flex vertical gap={8}>
           <Typography.Text strong>{states[job.state] ?? job.state}</Typography.Text>
           <Typography.Text>MSSV: {job.mssv} · UID: {job.uid}</Typography.Text>
