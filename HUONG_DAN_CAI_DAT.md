@@ -14,9 +14,9 @@ Video demo sản phẩm: [LINK VIDEO DEMO]
 | Python | 3.12 | Backend chạy trên Python 3.12 |
 | Node.js | 24.15 trở lên | Dùng cho frontend và công cụ tạo project đèn |
 | PostgreSQL | — | Dùng Neon hoặc PostgreSQL bất kỳ |
-| VS Code | Mới nhất | Dùng cho firmware ESP32 |
-| Extension PlatformIO IDE | Mới nhất | Build và nạp firmware ESP32 |
-| Extension Wokwi Simulator | Mới nhất | Mô phỏng đèn phòng |
+| VS Code | Mới nhất | Dùng để build firmware ESP32 |
+| Extension PlatformIO IDE | Mới nhất | Build firmware ESP32 |
+| Trình duyệt web và tài khoản Wokwi | — | Mô phỏng đèn phòng trên [wokwi.com](https://wokwi.com) |
 
 ---
 
@@ -115,9 +115,9 @@ Các bước này chạy trên máy phát triển và **không thay đổi datab
 
 ### 5.1. Cài công cụ
 
-1. Cài VS Code, extension **PlatformIO IDE** và **Wokwi Simulator**.
-2. Trong VS Code, chạy `F1 > Wokwi: Request a new License` nếu chưa có giấy phép.
-3. Kiểm tra lệnh `pio` có trong PATH. Nếu không có, mở terminal của PlatformIO hoặc chạy từ PlatformIO: Build.
+1. Cài VS Code và extension **PlatformIO IDE** (chỉ để build firmware).
+2. Kiểm tra lệnh `pio` có trong PATH. Nếu không có, mở terminal của PlatformIO trong VS Code.
+3. Đăng nhập tài khoản miễn phí tại [wokwi.com](https://wokwi.com) để mô phỏng trên web. Không cần cài extension Wokwi.
 
 ### 5.2. Xem trước project
 
@@ -156,18 +156,26 @@ node .\scripts\register-campus-lighting.ts
 node .\scripts\register-campus-lighting.ts --write
 ```
 
-### 5.5. Build và chạy mô phỏng
+### 5.5. Build firmware
 
 ```powershell
 pio run --project-dir .\iot\light-room\cs3-b101
-code --new-window .\iot\light-room\cs3-b101
 ```
 
-Trong cửa sổ project, chạy `F1 > Wokwi: Start Simulator`. Backend phải đang chạy ở cổng 8000.
+Lệnh tạo file `.pio\build\esp32\firmware.bin` và `firmware.elf` trong thư mục project.
+
+### 5.6. Chạy mô phỏng trên wokwi.com
+
+1. Mở [wokwi.com](https://wokwi.com), chọn **New Project** → **ESP32**.
+2. Mở tab `diagram.json`, dán nội dung từ `iot\light-room\cs3-b101\diagram.json`.
+3. Thêm file `firmware.bin` và `firmware.elf` từ thư mục `.pio\build\esp32` (nút **+** hoặc kéo thả).
+4. Bấm **Start the simulation**.
 
 Trên website, chọn **CS3** → **B101**. Khi board báo trực tuyến và đã báo GPIO, có thể điều khiển đèn.
 
-### 5.6. Công thức điện năng ảo
+> **Lưu ý quan trọng:** Firmware kết nối tới `http://host.wokwi.internal:8000`. Địa chỉ này chỉ trỏ tới máy của bạn khi chạy bằng extension VS Code. Trên wokwi.com, board không truy cập được backend chạy trên `localhost`. Muốn mô phỏng trên web, backend phải có địa chỉ công khai (HTTPS) và firmware phải được build với địa chỉ đó, hoặc dùng extension VS Code.
+
+### 5.7. Công thức điện năng ảo
 
 Điện năng được tính theo thời gian đèn bật:
 
