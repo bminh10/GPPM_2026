@@ -28,6 +28,7 @@ import EnergyDashboard from '../../components/energy/EnergyDashboard'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 import SearchableTable from '../../components/common/SearchableTable'
+import LightingWasteAlertPanel from '../../components/lighting/LightingWasteAlertPanel'
 import './Dashboard.css'
 
 type RoomUtilization = {
@@ -65,8 +66,10 @@ type UnderutilizedRoomsResponse = {
 }
 
 type SemesterOption = { id: number; name: string; start_date: string; end_date: string }
+type CampusOption = { id: number; name: string; address: string | null }
 
 const EMPTY_SEMESTERS: SemesterOption[] = []
+const EMPTY_CAMPUSES: CampusOption[] = []
 const dayNames = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']
 
 function formatDate(value: string) {
@@ -76,11 +79,19 @@ function formatDate(value: string) {
 export default function Dashboard() {
   const queryClient = useQueryClient()
   const [semesterId, setSemesterId] = useState<number | null>(null)
+  const [campusId, setCampusId] = useState<number | null>(null)
   const referencesQuery = useQuery({
     queryKey: ['dashboard', 'references'],
-    queryFn: async () => (await apiClient.get<SemesterOption[]>('/semesters')).data,
+    queryFn: async () => {
+      const [semestersResponse, campusesResponse] = await Promise.all([
+        apiClient.get<SemesterOption[]>('/semesters'),
+        apiClient.get<CampusOption[]>('/campus/all'),
+      ])
+      return { semesters: semestersResponse.data, campuses: campusesResponse.data }
+    },
   })
-  const semesters = referencesQuery.data ?? EMPTY_SEMESTERS
+  const semesters = referencesQuery.data?.semesters ?? EMPTY_SEMESTERS
+  const campuses = referencesQuery.data?.campuses ?? EMPTY_CAMPUSES
   const filtersLoading = referencesQuery.isLoading
   const filtersError = referencesQuery.error
     ? getErrorMessage(referencesQuery.error)
@@ -90,10 +101,11 @@ export default function Dashboard() {
 
   const analyticsParams = useMemo(() => ({
     ...(semesterId !== null ? { hoc_ky_id: semesterId } : {}),
+    ...(campusId !== null ? { campus_id: campusId } : {}),
     ...(selectedSemester
       ? { start_date: selectedSemester.start_date, end_date: selectedSemester.end_date }
       : {}),
-  }), [semesterId, selectedSemester])
+  }), [campusId, semesterId, selectedSemester])
 
   const analyticsQuery = useQuery({
     queryKey: ['analytics', analyticsParams],
@@ -292,6 +304,18 @@ export default function Dashboard() {
               options={semesters.map((semester) => ({ value: semester.id, label: semester.name }))}
               onChange={(value: number | undefined) => setSemesterId(value ?? null)}
             />
+            <SearchFilterSelect
+              aria-label="Lọc theo cơ sở"
+              placeholder="Tất cả cơ sở"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              loading={filtersLoading}
+              style={{ width: 320, maxWidth: '100%' }}
+              value={campusId ?? undefined}
+              options={campuses.map((campus) => ({ value: campus.id, label: campus.name }))}
+              onChange={(value: number | undefined) => setCampusId(value ?? null)}
+            />
           </Space>
         </Flex>
         {filtersError && (
@@ -424,6 +448,9 @@ export default function Dashboard() {
                     )}
                   </Card>
                 </Col>
+                {/* <Col span={24}>
+                  <LightingWasteAlertPanel />
+                </Col> */}
                 <Col span={24}>
                   <Card
                     id="dashboard-underused"

@@ -2,7 +2,7 @@ import { Navigate, createBrowserRouter } from 'react-router-dom'
 import MainLayout from '../components/layout/MainLayout'
 import Dashboard from '../pages/Dashboard/Dashboard'
 import HomePage from '../pages/Home/HomePage'
-import Map from '../pages/Map/Map'
+import { MapRoute } from '../pages/Map/Map'
 import AuthPage from '../pages/Auth/AuthPage'
 import ProtectedRoute, { PublicOnlyRoute, RoleRoute, RootRedirect } from './ProtectedRoute'
 import { ROUTE_PATHS } from './menuConfig'
@@ -40,7 +40,7 @@ export const route = createBrowserRouter([
           },
           {
             path: ROUTE_PATHS.map,
-            element: <RoleRoute roles={infrastructureRoles}><Map /></RoleRoute>,
+            element: <RoleRoute roles={infrastructureRoles}><MapRoute /></RoleRoute>,
           },
           {
             path: ROUTE_PATHS.cardReader,

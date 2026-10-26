@@ -1,7 +1,8 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Alert, Button, Card, Flex, Input, Spin, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
+import { useLocation } from 'react-router-dom'
 import CampusMap, { type MapFocus } from '../../components/map/CampusMap'
 import BuildingSelector from '../../components/map/BuildingSelector'
 import FloorSelector from '../../components/map/FloorSelector'
@@ -71,10 +72,54 @@ function localDate(value: Date) {
   ].join('-')
 }
 
+function focusRoomAt(
+  longitude: number,
+  latitude: number,
+  floor: number,
+  buildingId: string,
+  databaseRoomId: number | undefined,
+  buildings: Building[],
+): MapFocus {
+  const roomBuilding = buildings.find((item) => item.id === buildingId)
+  const roomBearing = roomBuilding
+    ? (Math.atan2(
+        (longitude - roomBuilding.center[0]) *
+          Math.cos((latitude * Math.PI) / 180),
+        latitude - roomBuilding.center[1],
+      ) *
+        180) /
+      Math.PI
+    : undefined
+
+  return {
+    center: [longitude, latitude],
+    key: databaseRoomId ?? 0,
+    zoom: 18.7,
+    pitch: 40,
+    bearing: roomBearing,
+    offset: [-60, 0],
+    elevation: roomBuilding
+      ? (floor - 1) * roomBuilding.floorHeight * 2.5 +
+        0.4 * 2.5 +
+        (roomBuilding.floorHeight * 0.7 + 1.5) * 2.5 / 2
+      : undefined,
+  }
+}
+
 export default function Map() {
+  const [mapIntent] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    return {
+      campusId: params.get('campus'),
+      roomName: params.get('room'),
+      date: params.get('date'),
+    }
+  })
   const [dataset, setDataset] = useState<CampusDataset | null>(null)
   const [campusId, setCampusId] = useState<string | null>(null)
-  const [selectedDate, setSelectedDate] = useState(() => localDate(new Date()))
+  const [selectedDate, setSelectedDate] = useState(() =>
+    mapIntent.date ?? localDate(new Date()),
+  )
   const [loadError, setLoadError] = useState<string | null>(null)
   const [campusOptions, setCampusOptions] = useState<CampusOption[]>([])
   const [semesters, setSemesters] = useState<SemesterOption[]>([])
@@ -87,7 +132,12 @@ export default function Map() {
   useEffect(() => {
     loadCampusDataset().then((d) => {
       setDataset(d)
-      setCampusId(d.campuses[0]?.id ?? null)
+      const requestedCampus = mapIntent.campusId?.toUpperCase()
+      setCampusId(
+        d.campuses.find((campus) => campus.id.toUpperCase() === requestedCampus)?.id ??
+        d.campuses[0]?.id ??
+        null,
+      )
     }).catch((error: unknown) => {
       setLoadError(error instanceof Error ? error.message : 'Không thể tải dữ liệu bản đồ')
     })
@@ -103,11 +153,11 @@ export default function Map() {
       )
       const initialSemester = currentSemester ?? semesterResponse.data[0]
       setSelectedSemesterId(initialSemester?.id)
-      if (initialSemester) setSelectedDate(initialSemester.start_date)
+      if (!mapIntent.date && initialSemester) setSelectedDate(initialSemester.start_date)
     }).catch((error: unknown) => {
       setReferenceError(getErrorMessage(error))
     })
-  }, [])
+  }, [mapIntent.campusId, mapIntent.date])
 
   if (loadError) return <Alert type="error" title="Lỗi dữ liệu bản đồ" description={loadError} showIcon />
   if (!dataset || !campusId) {
@@ -166,6 +216,7 @@ export default function Map() {
       campusOptions={campusOptions}
       semesterId={selectedSemesterId}
       selectedDate={selectedDate}
+      targetRoomName={mapIntent.roomName}
       lighting={lighting}
       canControl={canControl}
     />
@@ -180,6 +231,7 @@ type ViewProps = {
   campusOptions: CampusOption[]
   semesterId: number | undefined
   selectedDate: string
+  targetRoomName: string | null
   lighting: ReturnType<typeof useRoomLighting>
   canControl: boolean
 }
@@ -191,6 +243,7 @@ function CampusView({
   campusOptions,
   semesterId,
   selectedDate,
+  targetRoomName,
   lighting,
   canControl,
 }: ViewProps) {
@@ -319,6 +372,7 @@ function CampusView({
   const [buildingId, setBuildingId] = useState<string | null>(null)
   const [floor, setFloor] = useState(1)
   const [roomId, setRoomId] = useState<string | null>(null)
+  const [targetRoomDismissed, setTargetRoomDismissed] = useState(false)
   const [focus, setFocus] = useState<MapFocus | null>(() => ({
     center: campus.center,
     zoom: campus.zoom - 1,
@@ -327,8 +381,46 @@ function CampusView({
     key: Date.now(),
   }))
 
-  const building = buildings.find((b) => b.id === buildingId) ?? null
-  const selectedRoom = rooms.find((r) => r.id === roomId) ?? null
+  const targetRoom = targetRoomName
+    ? rooms.find((room) => normalizeRoomCode(room.code) === normalizeRoomCode(targetRoomName))
+    : undefined
+  const activeTargetRoom = targetRoomDismissed ? undefined : targetRoom
+  const activeBuildingId = activeTargetRoom?.buildingId ?? buildingId
+  const activeFloor = activeTargetRoom?.floor ?? floor
+  const activeRoomId = activeTargetRoom?.id ?? roomId
+  const building = buildings.find((item) => item.id === activeBuildingId) ?? null
+  const selectedRoom = rooms.find((room) => room.id === activeRoomId) ?? null
+  const targetRoomLongitude = activeTargetRoom?.center[0]
+  const targetRoomLatitude = activeTargetRoom?.center[1]
+  const targetRoomFloor = activeTargetRoom?.floor
+  const targetRoomBuildingId = activeTargetRoom?.buildingId
+  const targetDatabaseRoomId = activeTargetRoom?.databaseRoomId
+  const targetFocus = useMemo(
+    () => {
+      if (
+        targetRoomLongitude === undefined ||
+        targetRoomLatitude === undefined ||
+        targetRoomFloor === undefined ||
+        targetRoomBuildingId === undefined
+      ) return null
+      return focusRoomAt(
+        targetRoomLongitude,
+        targetRoomLatitude,
+        targetRoomFloor,
+        targetRoomBuildingId,
+        targetDatabaseRoomId,
+        buildings,
+      )
+    },
+    [
+      targetRoomLongitude,
+      targetRoomLatitude,
+      targetRoomFloor,
+      targetRoomBuildingId,
+      targetDatabaseRoomId,
+      buildings,
+    ],
+  )
   const isRoomLightOn = useCallback(
     (id: string, lightId: string) => lighting.lights[lightAddress(campusId, id, lightId)]?.reported_on ?? false,
     [campusId, lighting.lights],
@@ -344,32 +436,18 @@ function CampusView({
     (id: string) => {
       const room = rooms.find((r) => r.id === id)
       if (!room) return
-      const roomBuilding = buildings.find((item) => item.id === room.buildingId)
-      const roomBearing = roomBuilding
-        ? (Math.atan2(
-            (room.center[0] - roomBuilding.center[0]) *
-              Math.cos((room.center[1] * Math.PI) / 180),
-            room.center[1] - roomBuilding.center[1],
-          ) *
-            180) /
-          Math.PI
-        : undefined
+      setTargetRoomDismissed(true)
       setBuildingId(room.buildingId)
       setFloor(room.floor)
       setRoomId(room.id)
-      setFocus({
-        center: room.center,
-        key: Date.now(),
-        zoom: 18.7,
-        pitch: 40,
-        bearing: roomBearing,
-        offset: [-60, 0],
-        elevation: roomBuilding
-          ? (room.floor - 1) * roomBuilding.floorHeight * 2.5 +
-            0.4 * 2.5 +
-            (roomBuilding.floorHeight * 0.7 + 1.5) * 2.5 / 2
-          : undefined,
-      })
+      setFocus(focusRoomAt(
+        room.center[0],
+        room.center[1],
+        room.floor,
+        room.buildingId,
+        room.databaseRoomId,
+        buildings,
+      ))
     },
     [buildings, rooms],
   )
@@ -378,6 +456,7 @@ function CampusView({
     (id: string) => {
       const target = buildings.find((b) => b.id === id)
       if (!target) return
+      setTargetRoomDismissed(true)
       setBuildingId(id)
       setFloor(1)
       setRoomId(null)
@@ -392,6 +471,7 @@ function CampusView({
   )
 
   const selectNone = useCallback(() => {
+    setTargetRoomDismissed(true)
     setBuildingId(null)
     setFloor(1)
     setRoomId(null)
@@ -405,6 +485,7 @@ function CampusView({
   }, [campus])
 
   const selectCampusGround = useCallback(() => {
+    setTargetRoomDismissed(true)
     setBuildingId(null)
     setFloor(1)
     setRoomId(null)
@@ -419,6 +500,7 @@ function CampusView({
 
   const selectFloor = (f: number) => {
     if (!building) return
+    setTargetRoomDismissed(true)
     setFloor(f)
     if (selectedRoom && selectedRoom.floor !== f) setRoomId(null)
     setFocus({
@@ -467,11 +549,11 @@ function CampusView({
           campus={campus}
           buildings={buildings}
           rooms={rooms}
-          selectedBuildingId={buildingId}
-          selectedFloor={floor}
-          selectedRoomId={roomId}
+          selectedBuildingId={activeBuildingId}
+          selectedFloor={activeFloor}
+          selectedRoomId={activeRoomId}
           activeRoomNames={scheduledRoomNames}
-          focus={focus}
+          focus={targetFocus ?? focus}
           onSelectRoom={selectRoom}
           onSelectBuilding={selectBuilding}
           onSelectCampusGround={selectCampusGround}
@@ -499,14 +581,14 @@ function CampusView({
           </Card>
         )}
         <div id="map-building-selector">
-          <BuildingSelector buildings={buildings} value={buildingId} onChange={selectBuilding} onReset={selectNone} />
+          <BuildingSelector buildings={buildings} value={activeBuildingId} onChange={selectBuilding} onReset={selectNone} />
         </div>
         <div id="map-room-list" style={{ flex: 1, minHeight: 0, display: 'flex' }}>
           <RoomListPanel
             rooms={rooms}
             buildings={buildings}
             scheduledRoomNames={scheduledRoomNames}
-            selectedRoomId={roomId}
+            selectedRoomId={activeRoomId}
             onSelectRoom={selectRoom}
           />
         </div>
@@ -514,7 +596,7 @@ function CampusView({
 
       {building && (
         <Flex style={{ position: 'absolute', top: '50%', right: 16, transform: 'translateY(-50%)', zIndex: 2 }}>
-          <FloorSelector floors={building.floors} value={floor} onChange={selectFloor} />
+          <FloorSelector floors={building.floors} value={activeFloor} onChange={selectFloor} />
         </Flex>
       )}
 
@@ -546,7 +628,10 @@ function CampusView({
             getLightStatus={(lightId) => lighting.lights[lightAddress(campusId, selectedRoom.id, lightId)]}
             isSending={(lightId) => lighting.sending.has(lightAddress(campusId, selectedRoom.id, lightId))}
             canControl={canControl && !lighting.error}
-            onClose={() => setRoomId(null)}
+            onClose={() => {
+              setTargetRoomDismissed(true)
+              setRoomId(null)
+            }}
           />
         </Flex>
       )}
@@ -556,4 +641,9 @@ function CampusView({
       </Flex>
     </Flex>
   )
+}
+
+export function MapRoute() {
+  const { search } = useLocation()
+  return <Map key={search} />
 }

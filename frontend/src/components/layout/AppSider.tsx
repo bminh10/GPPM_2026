@@ -4,11 +4,14 @@ import { getMenuItems, ROUTE_PATHS } from '../../routes/menuConfig'
 import { getAppRole } from '../../routes/roleAccess'
 import { useAuth } from '../../store/authStore'
 import Logo from '../logo/Logo'
+import LightingWasteAlertButton from '../lighting/LightingWasteAlertButton'
 
 type AppSiderProps = {
   collapsed: boolean
   onCollapse: (collapsed: boolean) => void
 }
+
+
 
 export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
   const navigate = useNavigate()
@@ -16,7 +19,7 @@ export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
   const { user } = useAuth()
   const role = getAppRole(user?.role)
   const size = collapsed ? 36 : 0
-
+  LightingWasteAlertButton(role);
   return (
     <Layout.Sider
       id="app-sidebar-tour"
@@ -42,10 +45,10 @@ export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
         items={getMenuItems(role)}
         defaultOpenKeys={[
           ...(pathname.startsWith('/admin/') ||
-          pathname === ROUTE_PATHS.dataManagement ||
-          pathname === ROUTE_PATHS.courseRegistrations ||
-          pathname === ROUTE_PATHS.userManagement ||
-          pathname === ROUTE_PATHS.timetable
+            pathname === ROUTE_PATHS.dataManagement ||
+            pathname === ROUTE_PATHS.courseRegistrations ||
+            pathname === ROUTE_PATHS.userManagement ||
+            pathname === ROUTE_PATHS.timetable
             ? ['data-management-group']
             : []),
           ...(pathname === ROUTE_PATHS.map || pathname === ROUTE_PATHS.cardReader || pathname === ROUTE_PATHS.cardWriter

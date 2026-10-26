@@ -5,6 +5,9 @@ import { ROUTE_PATHS } from '../../routes/menuConfig'
 import { logOut } from '../../services/AuthService'
 import UserMenu from './UserMenu'
 import PageHelpTour from './PageHelpTour'
+import LightingWasteAlertButton from '../lighting/LightingWasteAlertButton'
+import { getAppRole } from '../../routes/roleAccess'
+import { useAuth } from '../../store/authStore'
 
 type AppHeaderProps = {
   collapsed: boolean
@@ -14,6 +17,8 @@ type AppHeaderProps = {
 export default function AppHeader({ collapsed, onToggle }: AppHeaderProps) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const { user } = useAuth()
+  const isStaff = getAppRole(user?.role) === 'staff'
 
   const handleLogout = async () => {
     await logOut().catch(() => undefined)
@@ -41,6 +46,7 @@ export default function AppHeader({ collapsed, onToggle }: AppHeaderProps) {
         />
         <Space>
           <PageHelpTour key={pathname} pathname={pathname} />
+          {!isStaff && <LightingWasteAlertButton />}
           <Button
             type="text"
             icon={<BookOutlined />}
