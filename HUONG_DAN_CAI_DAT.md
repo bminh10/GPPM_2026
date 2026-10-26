@@ -47,7 +47,7 @@ Sao chép `backend\.env.example` thành `backend\.env`, rồi điền các giá 
 | `LIGHTING_OFFLINE_SECONDS` | Không | Mặc định `30` |
 | `LIGHTING_COMMAND_TIMEOUT_SECONDS` | Không | Mặc định `30` |
 | `LIGHTING_DEFAULT_WATTS` | Không | Công suất mặc định của đèn chưa khai báo, mặc định `20` W |
-| `CARD_READER_ID`, `CARD_READER_KEY`, `CARD_WRITER_ID`, `CARD_WRITER_KEY` | Khi dùng trạm thẻ | Được tạo tự động bởi script cấu hình trạm (mục 6) |
+| `CARD_READER_ID`, `CARD_READER_KEY`, `CARD_WRITER_ID`, `CARD_WRITER_KEY` | Khi dùng trạm thẻ | Được tạo tự động bởi script cấu hình trạm (mục 5, 6) |
 
 Tạo `JWT_SECRET`:
 
@@ -131,25 +131,17 @@ npm run build
 
 ---
 
-## 4. Tạo tài khoản đăng nhập
-
-[CẦN XÁC NHẬN: cách tạo tài khoản Admin/Super Admin đầu tiên]
-
-Các chức năng quản trị (điều khiển đèn, đọc thẻ, cấp thẻ) yêu cầu tài khoản Admin hoặc Super Admin.
-
----
-
-## 5. Thiết lập đèn phòng bằng Wokwi
+## 4. Thiết lập đèn phòng bằng Wokwi
 
 Các bước này chạy trên máy phát triển và **không thay đổi database**, trừ bước đăng ký thiết bị.
 
-### 5.1. Cài công cụ
+### 4.1. Cài công cụ
 
 1. Cài VS Code và extension **PlatformIO IDE** (chỉ để build firmware).
 2. Kiểm tra lệnh `pio` có trong PATH. Nếu không có, mở terminal của PlatformIO trong VS Code.
 3. Đăng nhập tài khoản miễn phí tại [wokwi.com](https://wokwi.com) để mô phỏng trên web. Không cần cài extension Wokwi.
 
-### 5.2. Xem trước project
+### 4.2. Xem trước project
 
 Từ thư mục `frontend`:
 
@@ -159,7 +151,7 @@ node .\scripts\create-lighting-device.ts --campus CS3 --room B101
 
 Lệnh chỉ xem trước. Nếu phòng không tồn tại hoặc cấu hình sai, lệnh báo lỗi.
 
-### 5.3. Tạo project
+### 4.3. Tạo project
 
 ```powershell
 node .\scripts\create-lighting-device.ts --campus CS3 --room B101 --write
@@ -167,7 +159,7 @@ node .\scripts\create-lighting-device.ts --campus CS3 --room B101 --write
 
 Lệnh tạo thư mục `iot\light-room\cs3-b101`, gồm `platformio.ini`, `DeviceLights.h`, `diagram.json`, `wokwi.toml` và `device.json`. Lệnh từ chối nếu thư mục đã tồn tại để tránh ghi đè.
 
-### 5.4. Đăng ký thiết bị với backend
+### 4.4. Đăng ký thiết bị với backend
 
 > **Chỉ chạy khi đã thống nhất với nhóm và đúng database.** Bước này ghi database. Nếu Device ID đã tồn tại, đăng ký sẽ thay khóa của thiết bị cũ.
 
@@ -186,7 +178,7 @@ node .\scripts\register-campus-lighting.ts
 node .\scripts\register-campus-lighting.ts --write
 ```
 
-### 5.5. Build firmware
+### 4.5. Build firmware
 
 ```powershell
 pio run --project-dir .\iot\light-room\cs3-b101
@@ -194,7 +186,7 @@ pio run --project-dir .\iot\light-room\cs3-b101
 
 Lệnh tạo file `.pio\build\esp32\firmware.bin` và `firmware.elf` trong thư mục project.
 
-### 5.6. Chạy mô phỏng trên wokwi.com
+### 4.6. Chạy mô phỏng trên wokwi.com
 
 1. Mở [wokwi.com](https://wokwi.com), chọn **New Project** → **ESP32**.
 2. Mở tab `diagram.json`, dán nội dung từ `iot\light-room\cs3-b101\diagram.json`.
@@ -205,7 +197,7 @@ Trên website, chọn **CS3** → **B101**. Khi board báo trực tuyến và đ
 
 > **Lưu ý quan trọng:** Firmware kết nối tới `http://host.wokwi.internal:8000`. Địa chỉ này chỉ trỏ tới máy của bạn khi chạy bằng extension VS Code. Trên wokwi.com, board không truy cập được backend chạy trên `localhost`. Muốn mô phỏng trên web, backend phải có địa chỉ công khai (HTTPS) và firmware phải được build với địa chỉ đó, hoặc dùng extension VS Code.
 
-### 5.7. Công thức điện năng ảo
+### 4.7. Công thức điện năng ảo
 
 Điện năng được tính theo thời gian đèn bật:
 
@@ -218,9 +210,9 @@ Trên website, chọn **CS3** → **B101**. Khi board báo trực tuyến và đ
 
 ---
 
-## 6. Thiết lập trạm đọc thẻ RC522
+## 5. Thiết lập trạm đọc thẻ RC522
 
-### 6.1. Phần cứng
+### 5.1. Phần cứng
 
 Trạm đọc thẻ dùng **ESP32 NodeMCU-32S** và module **RC522**. Nối dây theo bảng:
 
@@ -236,7 +228,7 @@ Trạm đọc thẻ dùng **ESP32 NodeMCU-32S** và module **RC522**. Nối dây
 
 Rút USB trước khi nối dây. RC522 chỉ dùng nguồn **3.3V**, không cấp 5V.
 
-### 6.2. Cài thư viện và nạp firmware
+### 5.2. Cài thư viện và nạp firmware
 
 Mở `iot\card-reader` bằng VS Code có PlatformIO. Thư viện được khai báo trong `platformio.ini`:
 - `miguelbalboa/MFRC522@1.4.12`
@@ -244,7 +236,7 @@ Mở `iot\card-reader` bằng VS Code có PlatformIO. Thư viện được khai 
 
 Build và nạp bằng PlatformIO: Upload.
 
-### 6.3. Cấu hình trạm trên máy chạy backend
+### 5.3. Cấu hình trạm trên máy chạy backend
 
 ```powershell
 cd iot\card-reader
@@ -261,7 +253,7 @@ Sau đó đăng nhập Admin/Super Admin, mở menu **Đọc thẻ** trên websi
 
 ---
 
-## 7. Thiết lập trạm ghi thẻ
+## 6. Thiết lập trạm ghi thẻ
 
 Trạm ghi thẻ dùng **ESP32-S3** (YOLO UNO) và module RC522 thật, nạp firmware trong `iot\card-writer` bằng PlatformIO.
 
@@ -274,12 +266,12 @@ Sau khi cấu hình xong, đăng nhập Admin/Super Admin và mở menu **Cấp 
 
 ---
 
-## 8. Xử lý lỗi thường gặp
+## 7. Xử lý lỗi thường gặp
 
 | Triệu chứng | Nguyên nhân thường gặp | Cách xử lý |
 | --- | --- | --- |
 | Backend báo thiếu `DATABASE_URL` hoặc `JWT_SECRET` | Chưa có `.env` hoặc chưa điền | Kiểm tra `backend\.env` |
 | Frontend không gọi được API | Backend chưa chạy, hoặc sai `CORS_ORIGINS` | Chạy backend ở cổng 8000, kiểm tra `CORS_ORIGINS` |
-| Board Wokwi không online | Backend chưa chạy hoặc đăng ký chưa xong | Chạy backend, kiểm tra bước 5.4 |
+| Board Wokwi không online | Backend chưa chạy hoặc đăng ký chưa xong | Chạy backend, kiểm tra bước 4.4 |
 | `pio` không được nhận diện | PATH chưa có PlatformIO | Dùng terminal của PlatformIO |
-| RC522 không đọc được thẻ | Nối dây sai hoặc cấp nguồn 5V | Kiểm tra bảng ở mục 6.1 |
+| RC522 không đọc được thẻ | Nối dây sai hoặc cấp nguồn 5V | Kiểm tra bảng ở mục 5.1 |
