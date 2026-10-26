@@ -98,8 +98,7 @@ function WriterStationPage() {
           Ghi mã số sinh viên lên thẻ trắng hoặc thẻ mẫu được phép sử dụng.
         </Typography.Text>
       </div>
-      <Alert type="warning" showIcon title="Chỉ nhân sự được phân quyền · Chỉ thẻ trắng/thẻ mẫu được phép ghi"
-        description="Chưa đối chiếu danh sách sinh viên, chưa xác minh hoặc điểm danh. RC522 sẽ kiểm tra loại thẻ và khối 4 trước khi ghi. Không dùng thẻ trường có dữ liệu sẵn." />
+      <Alert type="warning" showIcon title="Chỉ nhân sự được phân quyền · Chỉ thẻ trắng/thẻ mẫu được phép ghi" />
       {query.error && <Alert type="error" showIcon title="Không kết nối được API trạm ghi" description={getErrorMessage(query.error)} />}
       <Card
         id="writer-card-status"
