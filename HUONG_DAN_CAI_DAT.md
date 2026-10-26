@@ -39,7 +39,7 @@ Sao chép `backend\.env.example` thành `backend\.env`, rồi điền các giá 
 | --- | --- | --- |
 | `DATABASE_URL` | Có | Chuỗi kết nối PostgreSQL, ví dụ `postgresql://user:pass@host:5432/dbname` |
 | `JWT_SECRET` | Có | Chuỗi bí mật ngẫu nhiên |
-| `HASH_KEY` | Có | Khóa AES-256 (base64) |
+| `HASH_KEY` | Có | Khóa mã hóa (base64) |
 | `CORS_ORIGINS` | Có | Địa chỉ frontend, mặc định `http://localhost:5173` |
 | `REDIS_URL` | Không | Cache phân tích; không có Redis thì hệ thống tự dùng database |
 | `COOKIE_SECURE` | Không | Đặt `true` khi chạy HTTPS |
@@ -78,6 +78,36 @@ uvicorn main:app --reload --port 8000
 ```
 
 Kiểm tra: mở `http://localhost:8000/docs`. Nếu hiện trang Swagger là backend đã chạy.
+
+### 2.4. Chạy backend bằng Docker (tùy chọn)
+
+Yêu cầu thêm: Docker Desktop đang chạy. Có hai cách lấy image.
+
+**Cách 1: Kéo image đã build sẵn từ Docker Hub** (không cần build):
+
+```powershell
+docker login -u tbmtmt0609
+docker pull tbmtmt0609/gppm-backend:cs3-b101-test
+docker tag tbmtmt0609/gppm-backend:cs3-b101-test smartou-backend
+```
+
+Image Docker Hub là repository **Private**. Cần đăng nhập bằng tài khoản được nhóm cấp quyền. Nếu chưa có quyền, dùng cách 2.
+
+**Cách 2: Tự build từ source** (lệnh chạy từ thư mục gốc repository):
+
+```powershell
+docker build -f backend\Dockerfile -t smartou-backend .
+```
+
+**Chạy container** (dùng image ở cách 1 hoặc cách 2):
+
+```powershell
+docker run --rm -p 8000:8000 -e PORT=8000 smartou-backend
+```
+
+Container dùng cổng `PORT` (mặc định `10000`). Lệnh trên map cổng `8000` để khớp với Wokwi và frontend local. Kiểm tra `http://localhost:8000/health` trả `{"status":"OK"}`.
+
+Image đã chứa sẵn `backend\.env` (theo [.dockerignore](d:/GPPM_2026/.dockerignore)), nên không cần `--env-file`. Điều này nghĩa là image mang theo secret: ai có image là có chuỗi kết nối database, `JWT_SECRET` và `HASH_KEY`. Không chia sẻ image cho người ngoài nhóm. Chi tiết đẩy image và triển khai Render xem [backend\DOCKER.md](d:/GPPM_2026/backend/DOCKER.md).
 
 ---
 
