@@ -49,9 +49,15 @@ def register(data: RegisterRequest, response: Response, db: Session = Depends(ge
 @router.post("/login", response_model=UserResponse)
 def login(data: LoginRequest, response: Response, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
-    # Cùng một thông báo cho cả hai trường hợp để không lộ email nào đã tồn tại
-    if not user or not _password_matches(user, data.pass_word, db) or not user.is_active:
+    if not user:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email hoặc mật khẩu không đúng")
+    if not user.is_active:
+        raise HTTPException(status.HTTP_423_LOCKED, "Tài khoản bị vô hiệu hóa!")
+
+    # Cùng một thông báo cho cả hai trường hợp để không lộ email nào đã tồn tại
+    if not _password_matches(user, data.pass_word, db):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email hoặc mật khẩu không đúng")
+
     set_session(response, user.id)
     return UserResponse.from_user(user)
 

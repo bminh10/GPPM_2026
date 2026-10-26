@@ -7,7 +7,7 @@
     "enabled": true
   },
   "vars": {
-    "API_ORIGIN": "https://gppm-backend-cs3-b101-test.onrender.com"
+    "API_ORIGIN": "https://be-3u2p.onrender.com"
   },
   "assets": {
     "directory": "./dist",

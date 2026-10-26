@@ -213,7 +213,7 @@ export default function TimetablePage() {
     enabled: automaticScheduleJobId !== null,
     refetchInterval: (query) =>
       query.state.data?.status === 'pending' || query.state.data?.status === 'running'
-        ? 1000
+        ? 2000
         : false,
   })
   useEffect(() => {

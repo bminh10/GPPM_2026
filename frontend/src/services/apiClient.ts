@@ -1,7 +1,6 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? '/api' : 'http://127.0.0.1:8000')
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 /** Mọi request gửi kèm cookie httpOnly (access/refresh token) nhờ `withCredentials`. */
 export const apiClient = axios.create({

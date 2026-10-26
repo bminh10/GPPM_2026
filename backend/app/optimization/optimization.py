@@ -1,23 +1,28 @@
 import logging
+import os
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
 from uuid import uuid4
 from datetime import date, datetime, timedelta, timezone
+from time import perf_counter
 from typing import Literal, cast
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
+from sqlalchemy import or_, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from ortools.sat.python import cp_model
 
 from app.auth.dependencies import get_current_user
 from core.redis_cache import invalidate_cache_prefix
-from app.schedules.schedules import find_conflicts
 from app.optimization.scheduling_core import (
     CandidateRoom,
     FixedSchedule,
     MeetingRequirement,
     ScheduleCandidate,
+    WeeklyAvailability,
     select_candidate_rooms,
     solve_weekly_schedule,
     weekday_occurs,
@@ -42,6 +47,22 @@ from db.database import (
 
 router = APIRouter(prefix="/optimization", tags=["Tối ưu"])
 logger = logging.getLogger(__name__)
+
+
+def _lower_optimizer_process_priority() -> None:
+    if not hasattr(os, "nice"):
+        return
+    try:
+        os.nice(10)
+    except OSError:
+        logger.warning("Unable to lower schedule optimizer process priority.")
+
+
+_schedule_optimizer = ProcessPoolExecutor(
+    max_workers=1,
+    mp_context=get_context("spawn"),
+    initializer=_lower_optimizer_process_priority,
+)
 
 
 class ScheduleOptimizationJobResponse(BaseModel):
@@ -114,11 +135,44 @@ def start_schedule_optimization(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    acquired_submission_lock = db.execute(
+        text("SELECT pg_try_advisory_xact_lock(:lock_key)"),
+        {"lock_key": 2026102701},
+    ).scalar()
+    if not acquired_submission_lock:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Đang khởi tạo một tác vụ phân bổ khác. Vui lòng thử lại sau.",
+        )
     expiration = datetime.now(timezone.utc) - timedelta(days=30)
     db.query(ScheduleOptimizationJob).filter(
         ScheduleOptimizationJob.created_at < expiration,
         ScheduleOptimizationJob.status.in_(("completed", "failed")),
     ).delete(synchronize_session=False)
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
+    stale_jobs = (
+        db.query(ScheduleOptimizationJob)
+        .filter(
+            ScheduleOptimizationJob.status.in_(("pending", "running")),
+            ScheduleOptimizationJob.updated_at < stale_cutoff,
+        )
+        .all()
+    )
+    for stale_job in stale_jobs:
+        stale_job.status = "failed"
+        stale_job.error = "Tác vụ phân bổ bị gián đoạn. Vui lòng chạy lại."
+    if stale_jobs:
+        db.commit()
+    active_job = (
+        db.query(ScheduleOptimizationJob.id)
+        .filter(ScheduleOptimizationJob.status.in_(("pending", "running")))
+        .first()
+    )
+    if active_job is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Đang có một tác vụ phân bổ thời khóa biểu khác chạy. Vui lòng thử lại sau.",
+        )
     job = ScheduleOptimizationJob(
         id=str(uuid4()),
         user_id=current_user.id,
@@ -128,7 +182,7 @@ def start_schedule_optimization(
     db.add(job)
     db.commit()
     db.refresh(job)
-    background_tasks.add_task(_run_schedule_optimization_job, job.id)
+    background_tasks.add_task(_dispatch_schedule_optimization_job, job.id)
     return {"job_id": job.id, "status": job.status}
 
 
@@ -199,6 +253,27 @@ def _run_schedule_optimization_job(job_id: str) -> None:
                 return
             job.status = "failed"
             job.error = "Đã xảy ra lỗi trong quá trình phân bổ lịch. Vui lòng thử lại."
+            db.commit()
+
+
+def _dispatch_schedule_optimization_job(job_id: str) -> None:
+    try:
+        _schedule_optimizer.submit(
+            _run_schedule_optimization_job,
+            job_id,
+        ).result()
+    except Exception:
+        logger.exception("Schedule optimization process failed for job %s.", job_id)
+        with SessionLocal() as db:
+            job = db.get(ScheduleOptimizationJob, job_id)
+            if job is None:
+                logger.error(
+                    "Schedule optimization job %s disappeared after dispatch failure.",
+                    job_id,
+                )
+                return
+            job.status = "failed"
+            job.error = "Không thể khởi chạy tiến trình phân bổ lịch. Vui lòng thử lại."
             db.commit()
 
 
@@ -440,42 +515,54 @@ def _allocate_semester(
         subject_name = subject.name if subject is not None else f"Môn {registration.mon_id}"
         return f"{subject_name} / {class_name}"
 
-    existing_fixed_schedules = db.query(ThoiKhoaBieu).filter(
-        ThoiKhoaBieu.start_date <= semester.end_date,
-        ThoiKhoaBieu.end_date >= allocation_start_date,
-    ).all()
+    candidate_generation_started = perf_counter()
     schedules_to_replace_ids = {schedule.id for schedule in schedules_to_replace}
-    fixed_schedules = (
-        [
-            schedule
-            for schedule in existing_fixed_schedules
-            if schedule.id not in schedules_to_replace_ids
-        ]
-    )
-    fixed_schedule_slot_ids = {
-        schedule.ca_hoc_id for schedule in existing_fixed_schedules
-    }
-    fixed_slots = (
-        db.query(CaHoc)
-        .filter(CaHoc.id.in_(fixed_schedule_slot_ids))
-        .all()
-        if fixed_schedule_slot_ids
-        else []
-    )
-    fixed_slot_by_id = {slot.id: slot for slot in fixed_slots}
-    fixed_schedule_data = [
-        FixedSchedule(
-            room_id=schedule.phong_hoc_id,
-            class_id=schedule.lop_id,
-            day_of_week=schedule.day_of_week,
-            start_date=schedule.start_date,
-            end_date=schedule.end_date,
-            start_time=fixed_slot_by_id[schedule.ca_hoc_id].start_time,
-            end_time=fixed_slot_by_id[schedule.ca_hoc_id].end_time,
+    pending_class_ids = {registration.lop_id for registration in pending_registrations}
+    fixed_schedule_rows = (
+        db.query(
+            ThoiKhoaBieu.id,
+            ThoiKhoaBieu.phong_hoc_id,
+            DangKyMonHoc.lop_id,
+            ThoiKhoaBieu.day_of_week,
+            ThoiKhoaBieu.start_date,
+            ThoiKhoaBieu.end_date,
+            CaHoc.start_time,
+            CaHoc.end_time,
         )
-        for schedule in fixed_schedules
-        if schedule.ca_hoc_id in fixed_slot_by_id
+        .join(
+            DangKyMonHoc,
+            ThoiKhoaBieu.dang_ky_mon_hoc_id == DangKyMonHoc.id,
+        )
+        .join(CaHoc, ThoiKhoaBieu.ca_hoc_id == CaHoc.id)
+        .filter(
+            ThoiKhoaBieu.start_date <= semester.end_date,
+            ThoiKhoaBieu.end_date >= allocation_start_date,
+            or_(
+                ThoiKhoaBieu.phong_hoc_id.in_({room.id for room in rooms}),
+                DangKyMonHoc.lop_id.in_(pending_class_ids),
+            ),
+        )
+        .all()
+    )
+    fixed_schedule_data_by_id = {
+        row.id: FixedSchedule(
+            room_id=row.phong_hoc_id,
+            class_id=row.lop_id,
+            day_of_week=row.day_of_week,
+            start_date=row.start_date,
+            end_date=row.end_date,
+            start_time=row.start_time,
+            end_time=row.end_time,
+        )
+        for row in fixed_schedule_rows
+    }
+    fixed_schedule_data = [
+        fixed_schedule
+        for schedule_id, fixed_schedule in fixed_schedule_data_by_id.items()
+        if schedule_id not in schedules_to_replace_ids
     ]
+    fallback_fixed_schedule_data = list(fixed_schedule_data_by_id.values())
+    time_slot_by_id = {slot.id: slot for slot in time_slots}
     requirement_failure_reason: dict[str, str] = {}
     schedule_by_requirement: dict[str, ThoiKhoaBieu] = {}
     for schedule in schedules_to_replace:
@@ -501,6 +588,19 @@ def _allocate_semester(
         (slot.start_time, slot.end_time)
         for slot in time_slots
     ]
+    availability = WeeklyAvailability.build(
+        [
+            CandidateRoom(id=room.id, capacity=room.capacity)
+            for room in rooms
+            if room.capacity is not None
+        ],
+        pending_class_ids,
+        fixed_schedule_data,
+        allocation_weekdays,
+        time_slot_ranges,
+        allocation_start_date,
+        cast(date, semester.end_date),
+    )
 
     for registration in pending_registrations:
         required_capacity = registration.so_luong
@@ -552,6 +652,7 @@ def _allocate_semester(
                     time_slot_ranges,
                     allocation_start_date,
                     cast(date, semester.end_date),
+                    availability=availability,
                 )
             )
             suitable_rooms = [
@@ -560,8 +661,16 @@ def _allocate_semester(
                 if room.id in candidate_room_ids
             ]
             for day_of_week in allocation_weekdays:
-                for slot in time_slots:
-                    for room in suitable_rooms:
+                rooms_by_slot: dict[int, list[PhongHoc]] = {}
+                for room in suitable_rooms:
+                    for slot_index in availability.available_slot_indices(
+                        room.id,
+                        registration.lop_id,
+                        day_of_week,
+                    ):
+                        rooms_by_slot.setdefault(slot_index, []).append(room)
+                for slot_index, slot in enumerate(time_slots):
+                    for room in rooms_by_slot.get(slot_index, []):
                         candidates.append(
                             ScheduleCandidate(
                                 requirement_id=requirement_id,
@@ -578,6 +687,15 @@ def _allocate_semester(
                             )
                         )
 
+    logger.info(
+        "Schedule optimization prepared %d requirements and %d candidates "
+        "with %d relevant fixed schedules in %.2fs.",
+        len(meeting_requirements),
+        len(candidates),
+        len(fixed_schedule_data),
+        perf_counter() - candidate_generation_started,
+    )
+    solver_started = perf_counter()
     solver_result = solve_weekly_schedule(
         meeting_requirements,
         candidates,
@@ -585,33 +703,28 @@ def _allocate_semester(
         allocation_start_date,
         cast(date, semester.end_date),
         max_time_seconds=30,
+        candidates_prevalidated=True,
     )
     if (
         data.mode == "all"
         and solver_result.unscheduled_requirement_ids
         and schedules_to_replace_ids
     ):
-        fallback_fixed_schedules = [
-            FixedSchedule(
-                room_id=schedule.phong_hoc_id,
-                class_id=schedule.lop_id,
-                day_of_week=schedule.day_of_week,
-                start_date=schedule.start_date,
-                end_date=schedule.end_date,
-                start_time=fixed_slot_by_id[schedule.ca_hoc_id].start_time,
-                end_time=fixed_slot_by_id[schedule.ca_hoc_id].end_time,
-            )
-            for schedule in existing_fixed_schedules
-            if schedule.ca_hoc_id in fixed_slot_by_id
-        ]
         solver_result = solve_weekly_schedule(
             meeting_requirements,
             candidates,
-            fallback_fixed_schedules,
+            fallback_fixed_schedule_data,
             allocation_start_date,
             cast(date, semester.end_date),
             max_time_seconds=30,
+            candidates_prevalidated=False,
         )
+    logger.info(
+        "Schedule optimization solved %d requirements with status %s in %.2fs.",
+        len(meeting_requirements),
+        cp_model.CpSolver().status_name(solver_result.status),
+        perf_counter() - solver_started,
+    )
     if solver_result.status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -646,9 +759,7 @@ def _allocate_semester(
     for candidate in selected_candidates:
         registration = registrations_by_id[candidate.registration_id]
         room = rooms_by_id[candidate.room_id]
-        slot = fixed_slot_by_id.get(candidate.time_slot_id)
-        if slot is None:
-            slot = next(item for item in time_slots if item.id == candidate.time_slot_id)
+        slot = time_slot_by_id[candidate.time_slot_id]
         first_meeting_date = _first_weekday(
             allocation_start_date,
             semester.end_date,
@@ -875,6 +986,26 @@ def suggest_room_allocation(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Không tìm thấy cơ sở đào tạo (id={data.campus_id}).",
             )
+    existing_schedules = (
+        db.query(
+            ThoiKhoaBieu.phong_hoc_id,
+            CaHoc.start_time,
+            CaHoc.end_time,
+        )
+        .join(CaHoc, ThoiKhoaBieu.ca_hoc_id == CaHoc.id)
+        .filter(
+            ThoiKhoaBieu.day_of_week == data.day_of_week,
+            ThoiKhoaBieu.start_date <= data.end_date,
+            ThoiKhoaBieu.end_date >= data.start_date,
+        )
+        .all()
+    )
+    conflicting_room_ids = {
+        room_id
+        for room_id, existing_start, existing_end in existing_schedules
+        if time_slot.start_time < existing_end
+        and existing_start < time_slot.end_time
+    }
     class_size = registration.so_luong
     candidate_query = db.query(PhongHoc)
     if data.campus_id is not None:
@@ -906,16 +1037,7 @@ def suggest_room_allocation(
             )
             continue
 
-        values = {
-            **data.model_dump(),
-            "phong_hoc_id": room.id,
-        }
-        conflicts = [
-            conflict
-            for conflict in find_conflicts(db, values)
-            if "room" in conflict["conflict_types"]
-        ]
-        if conflicts:
+        if room.id in conflicting_room_ids:
             excluded_rooms.append(
                 {
                     "id": room.id,
