@@ -40,15 +40,17 @@ export default function AppHeader({ collapsed, onToggle }: AppHeaderProps) {
     >
 
       <Flex align="center" justify="space-between" style={{ height: '100%' }}>
-        <Button
-          type="text"
-          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          onClick={onToggle}
-        />
+        <Space>
+          <Button
+            type="text"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={onToggle}
+          />
+          <BugReportButton />
+        </Space>
         <Space>
           <PageHelpTour key={pathname} pathname={pathname} />
           {!isStaff && <LightingWasteAlertButton />}
-          <BugReportButton />
           <Button
             type="text"
             icon={<BookOutlined />}
