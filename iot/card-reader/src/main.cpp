@@ -7,7 +7,6 @@
 #include <WiFiClientSecure.h>
 #include <time.h>
 #include "ReaderConfig.h"
-#include "../../light-room/firmware/include/HttpResponseBody.h"
 
 #if __has_include("DeviceLocal.h")
 #include "DeviceLocal.h"
@@ -19,12 +18,66 @@ MFRC522 reader(RFID_SS, RFID_RST);
 unsigned long lastScan = 0;
 unsigned long lastWifiAttempt = 0;
 bool scanned = false;
+WiFiClient plainClient;
+WiFiClientSecure secureClient;
+HTTPClient http;
+
+void closeScanConnection() {
+  http.end();
+  plainClient.stop();
+  secureClient.stop();
+}
+
+bool openScanRequest(const String& url) {
+  const String base = READER_API_URL;
+  bool started = false;
+  if (base.startsWith("https://")) {
+    if (!strlen(READER_ROOT_CA) || time(nullptr) < 1700000000) {
+      Serial.println("ERROR: HTTPS requires a trusted root CA and synchronized time.");
+      return false;
+    }
+    secureClient.setCACert(READER_ROOT_CA);
+    secureClient.setHandshakeTimeout(5);
+    started = http.begin(secureClient, url);
+  } else if (READER_ALLOW_LAN_HTTP && base.startsWith("http://")) {
+    started = http.begin(plainClient, url);
+  }
+  if (!started) {
+    Serial.println("ERROR: API URL/TLS configuration is invalid.");
+    return false;
+  }
+  http.setReuse(true);
+  http.setConnectTimeout(4000);
+  http.setTimeout(4000);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Reader-Id", READER_ID);
+  http.addHeader("X-Reader-Key", READER_DEVICE_KEY);
+  return true;
+}
+
+constexpr uint8_t BUZZER_LEDC_CHANNEL = 0;
+constexpr uint32_t BUZZER_TONE_HZ = 2700;
+
+// Tone is driven by LEDC PWM, which assumes an active-high buzzer.
+void buzzerInit() {
+  ledcSetup(BUZZER_LEDC_CHANNEL, BUZZER_TONE_HZ, 8);
+  ledcAttachPin(BUZZER_PIN, BUZZER_LEDC_CHANNEL);
+  ledcWrite(BUZZER_LEDC_CHANNEL, 0);
+}
+
+void buzzerOn() {
+  ledcWriteTone(BUZZER_LEDC_CHANNEL, BUZZER_TONE_HZ);
+}
+
+void buzzerOff() {
+  ledcWrite(BUZZER_LEDC_CHANNEL, 0);
+}
 
 void beep(unsigned int count, unsigned long duration) {
   for (unsigned int i = 0; i < count; ++i) {
-    digitalWrite(BUZZER_PIN, BUZZER_ACTIVE_HIGH ? HIGH : LOW);
+    buzzerOn();
     delay(duration);
-    digitalWrite(BUZZER_PIN, BUZZER_ACTIVE_HIGH ? LOW : HIGH);
+    buzzerOff();
     delay(100);
   }
 }
@@ -47,45 +100,23 @@ bool sendReport(const JsonDocument& report, String& mssv, String& attendanceStat
     Serial.println("ERROR: Wi-Fi disconnected. Scan was NOT delivered; reconnect and scan again.");
     return false;
   }
-  const String base = READER_API_URL;
-  WiFiClient plain;
-  WiFiClientSecure secure;
-  HTTPClient http;
-  http.useHTTP10(true);
-  http.setReuse(false);
-  http.setConnectTimeout(4000);
-  http.setTimeout(4000);
-  bool started = false;
-  if (base.startsWith("https://")) {
-    if (!strlen(READER_ROOT_CA) || time(nullptr) < 1700000000) {
-      Serial.println("ERROR: HTTPS requires a trusted root CA and synchronized time.");
-      return false;
-    }
-    secure.setCACert(READER_ROOT_CA);
-    secure.setHandshakeTimeout(5);
-    started = http.begin(secure, base + "/iot/card-reader/scans");
-  } else if (READER_ALLOW_LAN_HTTP && base.startsWith("http://")) {
-    started = http.begin(plain, base + "/iot/card-reader/scans");
-  }
-  if (!started) {
-    Serial.println("ERROR: API URL/TLS configuration is invalid.");
-    return false;
-  }
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("X-Reader-Id", READER_ID);
-  http.addHeader("X-Reader-Key", READER_DEVICE_KEY);
+  const String url = String(READER_API_URL) + "/iot/card-reader/scans";
+  if (!openScanRequest(url)) return false;
   String body;
   serializeJson(report, body);
-  const int status = http.POST(body);
-  String response;
-  const auto result = status > 0
-    ? readResponseBody(http.getStream(), http.getSize(), response)
-    : BodyResult::Truncated;
-  http.end();
-  plain.stop();
-  secure.stop();
+  int status = http.POST(body);
+  if (status <= 0) {
+    // A kept-alive socket can be closed by the server while idle; reconnect once.
+    closeScanConnection();
+    if (!openScanRequest(url)) return false;
+    status = http.POST(body);
+  }
+  // getString() decodes chunked bodies, which Render uses, and respects the HTTP timeout.
+  const String response = status > 0 ? http.getString() : String();
+  if (response.isEmpty()) closeScanConnection();
+  else http.end();
   JsonDocument ack;
-  const bool delivered = status == 200 && result == BodyResult::Complete &&
+  const bool delivered = status == 200 && !response.isEmpty() &&
     !deserializeJson(ack, response) && ack["received"].is<bool>() &&
     ack["received"].as<bool>() && ack["read_status"].as<String>() == report["read_status"].as<String>();
   if (!delivered) {
@@ -109,8 +140,7 @@ bool sendReport(const JsonDocument& report, String& mssv, String& attendanceStat
 
 void setup() {
   Serial.begin(115200);
-  digitalWrite(BUZZER_PIN, BUZZER_ACTIVE_HIGH ? LOW : HIGH);
-  pinMode(BUZZER_PIN, OUTPUT);
+  buzzerInit();
   SPI.begin(RFID_SCK, RFID_MISO, RFID_MOSI, RFID_SS);
   reader.PCD_Init();
   const byte version = reader.PCD_ReadRegister(MFRC522::VersionReg);
@@ -139,6 +169,7 @@ void loop() {
   }
   if (scanned && millis() - lastScan < SCAN_COOLDOWN_MS) { delay(5); return; }
   if (!reader.PICC_IsNewCardPresent()) { delay(5); return; }
+  const unsigned long scanAt = millis();
   if (!reader.PICC_ReadCardSerial()) {
     Serial.println("ERROR: Card detected but UID read failed.");
     beep(2, 100);
@@ -146,6 +177,7 @@ void loop() {
   }
   scanned = true;
   lastScan = millis();
+  beep(1, 80);
   const auto type = reader.PICC_GetType(reader.uid.sak);
   JsonDocument report;
   report["uid"] = hexBytes(reader.uid.uidByte, reader.uid.size, true);
@@ -199,6 +231,7 @@ void loop() {
   String mssv;
   String attendanceStatus;
   const bool delivered = sendReport(report, mssv, attendanceStatus);
+  Serial.printf("TIMING: tap->result %lu ms\n", millis() - scanAt);
   Serial.println(delivered ? "API: received scan." : "API: scan NOT confirmed.");
   Serial.println("==================================");
   if (!delivered) beep(3, 100);

@@ -8,7 +8,6 @@
 #include <time.h>
 #include "CardPayload.h"
 #include "WriterConfig.h"
-#include "../../light-room/firmware/include/HttpResponseBody.h"
 
 #if __has_include("DeviceLocal.h")
 #include "DeviceLocal.h"
@@ -24,47 +23,87 @@ unsigned long lastWifi = 0;
 bool pausedForUnknownClaim = false;
 bool wifiWasConnected = false;
 
+constexpr uint8_t BUZZER_LEDC_CHANNEL = 0;
+constexpr uint32_t BUZZER_TONE_HZ = 2700;
+
+// Tone is driven by LEDC PWM, which assumes an active-high buzzer.
+void buzzerInit() {
+  ledcSetup(BUZZER_LEDC_CHANNEL, BUZZER_TONE_HZ, 8);
+  ledcAttachPin(BUZZER_PIN, BUZZER_LEDC_CHANNEL);
+  ledcWrite(BUZZER_LEDC_CHANNEL, 0);
+}
+
+void buzzerOn() {
+  ledcWriteTone(BUZZER_LEDC_CHANNEL, BUZZER_TONE_HZ);
+}
+
+void buzzerOff() {
+  ledcWrite(BUZZER_LEDC_CHANNEL, 0);
+}
+
 void beep(unsigned count) {
   for (unsigned i = 0; i < count; ++i) {
-    digitalWrite(BUZZER_PIN, BUZZER_ACTIVE_HIGH ? HIGH : LOW);
+    buzzerOn();
     delay(100);
-    digitalWrite(BUZZER_PIN, BUZZER_ACTIVE_HIGH ? LOW : HIGH);
+    buzzerOff();
     delay(100);
   }
 }
 
-bool request(const char* endpoint, const JsonDocument& body, JsonDocument& response) {
+WiFiClient plainClient;
+WiFiClientSecure secureClient;
+HTTPClient http;
+
+void closeRequest() {
+  http.end();
+  plainClient.stop();
+  secureClient.stop();
+}
+
+bool openRequest(const String& url) {
+  const String base = READER_API_URL;
+  bool started = false;
+  if (base.startsWith("https://") && strlen(READER_ROOT_CA) && time(nullptr) > 1700000000) {
+    secureClient.setCACert(READER_ROOT_CA);
+    secureClient.setHandshakeTimeout(5);
+    started = http.begin(secureClient, url);
+  } else if (READER_ALLOW_LAN_HTTP && base.startsWith("http://")) {
+    started = http.begin(plainClient, url);
+  }
+  if (!started) return false;
+  http.setReuse(true);
+  http.setConnectTimeout(4000);
+  http.setTimeout(4000);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Writer-Id", READER_ID);
+  http.addHeader("X-Writer-Key", READER_DEVICE_KEY);
+  return true;
+}
+
+// Non-idempotent requests (claim) use a fresh connection and are never retried,
+// because a lost response may mean the authorization was already consumed.
+bool request(const char* endpoint, const JsonDocument& body, JsonDocument& response, bool idempotent = true) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("ERROR: Wi-Fi disconnected; no card write authorized.");
     return false;
   }
-  WiFiClient plain;
-  WiFiClientSecure secure;
-  HTTPClient http;
   const String base = READER_API_URL;
-  http.useHTTP10(true);
-  http.setReuse(false);
-  http.setConnectTimeout(4000);
-  http.setTimeout(4000);
-  bool started = false;
-  if (base.startsWith("https://") && strlen(READER_ROOT_CA) && time(nullptr) > 1700000000) {
-    secure.setCACert(READER_ROOT_CA);
-    secure.setHandshakeTimeout(5);
-    started = http.begin(secure, base + endpoint);
-  } else if (READER_ALLOW_LAN_HTTP && base.startsWith("http://")) {
-    started = http.begin(plain, base + endpoint);
-  }
-  if (!started) { Serial.println("ERROR: Invalid API/TLS configuration."); return false; }
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("X-Writer-Id", READER_ID);
-  http.addHeader("X-Writer-Key", READER_DEVICE_KEY);
-  String payload, result;
+  const String url = base + endpoint;
+  if (!idempotent) closeRequest();
+  String payload;
   serializeJson(body, payload);
-  const int status = http.POST(payload);
-  const auto read = status > 0 ? readResponseBody(http.getStream(), http.getSize(), result) : BodyResult::Truncated;
-  http.end();
-  plain.stop();
-  secure.stop();
+  int status = -1;
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    if (!openRequest(url)) { Serial.println("ERROR: Invalid API/TLS configuration."); return false; }
+    status = http.POST(payload);
+    if (status > 0 || !idempotent || attempt == 1) break;
+    // A kept-alive socket can be closed by the server while idle; reconnect once.
+    closeRequest();
+  }
+  // getString() decodes chunked bodies, which Render uses, and respects the HTTP timeout.
+  const String result = status > 0 ? http.getString() : String();
+  if (result.isEmpty()) closeRequest();
+  else http.end();
   if (status <= 0) {
     Serial.printf("ERROR: Writer API transport %d (%s), endpoint=%s\n",
                   status, HTTPClient::errorToString(status).c_str(), endpoint);
@@ -81,7 +120,7 @@ bool request(const char* endpoint, const JsonDocument& body, JsonDocument& respo
     else if (status == 503) Serial.println("Check writer setup and backend configuration; inspect backend logs.");
     return false;
   }
-  if (read != BodyResult::Complete) {
+  if (result.isEmpty()) {
     Serial.printf("ERROR: Incomplete/oversized API response, endpoint=%s; result NOT confirmed.\n", endpoint);
     return false;
   }
@@ -111,8 +150,7 @@ void setup() {
   Serial.println("CampusOpt writer: YOLO UNO ESP32-S3 (USB CDC).");
   Serial.printf("RC522 pins: SCK=%u, MISO=%u, MOSI=%u, SS=%u, RST=%u; buzzer=%u\n",
                 RFID_SCK, RFID_MISO, RFID_MOSI, RFID_SS, RFID_RST, BUZZER_PIN);
-  digitalWrite(BUZZER_PIN, BUZZER_ACTIVE_HIGH ? LOW : HIGH);
-  pinMode(BUZZER_PIN, OUTPUT);
+  buzzerInit();
   SPI.begin(RFID_SCK, RFID_MISO, RFID_MOSI, RFID_SS);
   reader.PCD_Init();
   const byte version = reader.PCD_ReadRegister(MFRC522::VersionReg);
@@ -165,6 +203,7 @@ void loop() {
   }
   if (pausedForUnknownClaim || unconfirmedResult["job_id"].is<const char*>()) { delay(10); return; }
   if (!reader.PICC_IsNewCardPresent()) { delay(5); return; }
+  const unsigned long scanAt = millis();
   if (!reader.PICC_ReadCardSerial()) { Serial.println("ERROR: Cannot read UID."); beep(2); return; }
   const auto type = reader.PICC_GetType(reader.uid.sak);
   const String uid = uidText();
@@ -181,8 +220,12 @@ void loop() {
   identity["uid"] = uid;
   identity["card_type"] = reader.PICC_GetTypeName(type);
   if (pendingUid.isEmpty() || pendingUid != uid) {
-    if (!request("/iot/card-writer/present", identity, response) ||
-        !response["received"].is<bool>() || !response["received"].as<bool>()) {
+    const unsigned long sentAt = millis();
+    const bool acknowledged = request("/iot/card-writer/present", identity, response) &&
+        response["received"].is<bool>() && response["received"].as<bool>();
+    Serial.printf("TIMING: scan->sent %lu ms, HTTP present %lu ms, scan->ack %lu ms\n",
+                  sentAt - scanAt, millis() - sentAt, millis() - scanAt);
+    if (!acknowledged) {
       Serial.println("ERROR: Card presentation not acknowledged by API.");
       beep(3);
     } else {
@@ -193,7 +236,7 @@ void loop() {
     reader.PCD_StopCrypto1();
     return;
   }
-  if (!request("/iot/card-writer/claim", identity, response)) {
+  if (!request("/iot/card-writer/claim", identity, response, false)) {
     pausedForUnknownClaim = true;
     Serial.println("ERROR: Claim uncertain. NO WRITE performed. Check web and restart writer; authorization may have been consumed.");
     reader.PICC_HaltA();
