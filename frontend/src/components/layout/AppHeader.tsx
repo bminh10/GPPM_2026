@@ -5,6 +5,7 @@ import { ROUTE_PATHS } from '../../routes/menuConfig'
 import { logOut } from '../../services/AuthService'
 import UserMenu from './UserMenu'
 import PageHelpTour from './PageHelpTour'
+import BugReportButton from './BugReportButton'
 import LightingWasteAlertButton from '../lighting/LightingWasteAlertButton'
 import { getAppRole } from '../../routes/roleAccess'
 import { useAuth } from '../../store/authStore'
@@ -47,6 +48,7 @@ export default function AppHeader({ collapsed, onToggle }: AppHeaderProps) {
         <Space>
           <PageHelpTour key={pathname} pathname={pathname} />
           {!isStaff && <LightingWasteAlertButton />}
+          <BugReportButton />
           <Button
             type="text"
             icon={<BookOutlined />}
