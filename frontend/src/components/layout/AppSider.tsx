@@ -4,7 +4,6 @@ import { getMenuItems, ROUTE_PATHS } from '../../routes/menuConfig'
 import { getAppRole } from '../../routes/roleAccess'
 import { useAuth } from '../../store/authStore'
 import Logo from '../logo/Logo'
-import LightingWasteAlertButton from '../lighting/LightingWasteAlertButton'
 
 type AppSiderProps = {
   collapsed: boolean
@@ -19,7 +18,6 @@ export default function AppSider({ collapsed, onCollapse }: AppSiderProps) {
   const { user } = useAuth()
   const role = getAppRole(user?.role)
   const size = collapsed ? 36 : 0
-  LightingWasteAlertButton(role);
   return (
     <Layout.Sider
       id="app-sidebar-tour"

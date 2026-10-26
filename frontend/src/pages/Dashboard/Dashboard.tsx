@@ -28,7 +28,6 @@ import EnergyDashboard from '../../components/energy/EnergyDashboard'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 import SearchableTable from '../../components/common/SearchableTable'
-import LightingWasteAlertPanel from '../../components/lighting/LightingWasteAlertPanel'
 import './Dashboard.css'
 
 type RoomUtilization = {

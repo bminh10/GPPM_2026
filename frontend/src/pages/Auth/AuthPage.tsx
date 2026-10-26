@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Checkbox, Form, Input, Segmented, Typography, message } from 'antd'
+import { Button, Checkbox, Form, Input, Segmented, message } from 'antd'
 import {
   LockOutlined,
   MailOutlined,

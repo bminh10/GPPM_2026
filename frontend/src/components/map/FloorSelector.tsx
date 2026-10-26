@@ -1,4 +1,4 @@
-import { Card, Segmented, Typography } from 'antd'
+import { Card, Segmented } from 'antd'
 
 type Props = {
   floors: number

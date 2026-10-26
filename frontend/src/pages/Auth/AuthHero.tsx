@@ -1,5 +1,5 @@
-import { EnvironmentOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { Typography, Tag } from 'antd'
+import { EnvironmentOutlined } from '@ant-design/icons'
+import { Typography } from 'antd'
 
 export default function AuthHero() {
   return (
