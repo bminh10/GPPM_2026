@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Alert, Card, Descriptions, Flex, Tag, Typography } from 'antd'
-import { ScanOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Descriptions, Flex, Tag, Typography } from 'antd'
+import { EyeInvisibleOutlined, EyeOutlined, ScanOutlined } from '@ant-design/icons'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
 import AttendancePanel from './AttendancePanel'
+import smartouLogo from '../../assets/smartou-logo.png'
+import contactlessIcon from '../../assets/smartou-contactless.png'
 
 type Scan = {
   uid: string
@@ -22,6 +24,61 @@ type Scan = {
   } | null
 }
 type ReaderResponse = { reader_id: string; scan: Scan | null }
+
+const VISIBLE_DIGITS = 5
+
+function MssvCard({ mssv }: { mssv: string | null }) {
+  const [visible, setVisible] = useState(false)
+  const shown = !mssv
+    ? '----------'
+    : visible
+      ? mssv
+      : mssv.slice(0, VISIBLE_DIGITS) + '*'.repeat(mssv.length - VISIBLE_DIGITS)
+  return (
+    <Flex vertical align="center" gap={8}>
+      <div style={{
+        position: 'relative', overflow: 'hidden', width: '100%', maxWidth: 420, aspectRatio: '1.6',
+        borderRadius: 16, boxSizing: 'border-box', padding: '18px 24px',
+        display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        background: 'linear-gradient(90deg, #000b3d 0%, #00119e 40%, #0008c4 65%, #140f7a 100%)',
+        boxShadow: '0 8px 24px rgba(0, 16, 77, 0.25)', color: '#fff',
+      }}>
+        <svg viewBox="0 0 300 190" preserveAspectRatio="none" aria-hidden style={{ position: 'absolute', left: 0, top: 0, width: '60%', height: '100%', opacity: 0.55 }}>
+          <g stroke="rgba(190, 210, 255, 0.35)" strokeWidth="0.8" fill="none">
+            <path d="M10 20 L60 60 L120 40 L170 110 L95 150 L30 170 L10 120 Z" />
+            <path d="M60 60 L30 110 L95 150 M120 40 L140 10 M170 110 L230 130 L250 60 L190 30 L140 10" />
+            <path d="M0 80 L40 95 L80 85 M10 170 L70 150 M120 40 L170 60 L230 130" />
+          </g>
+          <g fill="rgba(210, 225, 255, 0.6)">
+            {[[10, 20], [60, 60], [120, 40], [170, 110], [95, 150], [30, 170], [10, 120], [30, 110], [140, 10], [230, 130], [250, 60], [190, 30], [170, 60], [80, 85]].map(([x, y]) => (
+              <circle key={`${x}-${y}`} cx={x} cy={y} r="2.2" />
+            ))}
+          </g>
+        </svg>
+
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span style={{ fontSize: 30, fontWeight: 500, letterSpacing: 0.5 }}>Smart</span>
+          <span style={{ fontSize: 36, fontWeight: 900, letterSpacing: 1 }}>OU</span>
+        </div>
+
+        <img src={smartouLogo} alt="" aria-hidden style={{ position: 'absolute', right: '8%', top: '24%', width: '28%' }} />
+
+        <Flex align="center" gap={10} style={{ position: 'relative' }}>
+          <img src={contactlessIcon} alt="" aria-hidden style={{ height: 40, width: 'auto' }} />
+          <span style={{ fontSize: 26, letterSpacing: 2.5, fontWeight: 500, color: '#fff', fontFamily: "'Segoe UI', Arial, sans-serif" }}>{shown}</span>
+        </Flex>
+      </div>
+      <Button
+        size="small"
+        icon={visible ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+        disabled={!mssv}
+        onClick={() => setVisible((value) => !value)}
+      >
+        {visible ? 'Ẩn MSSV' : 'Hiện MSSV'}
+      </Button>
+    </Flex>
+  )
+}
 
 export default function CardReaderPage() {
   const [data, setData] = useState<ReaderResponse | null>(null)
@@ -73,9 +130,11 @@ export default function CardReaderPage() {
         }
         styles={{ header: { background: 'linear-gradient(105deg, #eaf4fb, #f7fbfe)', borderBottomColor: '#dbe9f3' } }}
       >
-        {!scan ? (
-          <Typography.Paragraph>Chưa nhận được lần quét nào. Vui lòng mở đầu đọc và chạm thẻ.</Typography.Paragraph>
-        ) : (
+        <Flex vertical gap={12}>
+          <MssvCard mssv={scan?.mssv ?? null} />
+          {!scan ? (
+            <Typography.Paragraph>Chưa nhận được lần quét nào. Vui lòng mở đầu đọc và chạm thẻ.</Typography.Paragraph>
+          ) : (
           <Flex vertical gap={12}>
             {scan.attendance && <Alert showIcon
               type={error ? 'warning' : scan.attendance.status === 'recorded' ? 'success' : 'warning'}
@@ -83,28 +142,13 @@ export default function CardReaderPage() {
               description={scan.attendance.campus_name
                 ? `Cơ sở: ${scan.attendance.campus_name}. Kết quả của lần quét gần nhất, không phải trạng thái phiên hiện tại.`
                 : 'Chưa có phiên điểm danh. Đây là kết quả của lần quét gần nhất.'} />}
-            <Card
-              id="reader-scan-mssv"
-              size="small"
-              title={<Typography.Text strong style={{ color: '#164d6b' }}>Mã số sinh viên trên thẻ</Typography.Text>}
-              styles={{ header: { background: 'linear-gradient(105deg, #eaf4fb, #f7fbfe)', borderBottomColor: '#dbe9f3' } }}
-            >
-              {scan.mssv ? (
-                <Typography.Title level={2} style={{ margin: 0, color: '#12658d' }}>
-                  <Typography.Text copyable style={{ color: '#12658d' }}>{scan.mssv}</Typography.Text>
-                </Typography.Title>
-              ) : (
-                <Typography.Text type="warning">
-                  {scan.read_status === 'ok'
-                    ? 'Không tìm thấy MSSV đúng định dạng trong khối 4.'
-                    : 'Chưa đọc được MSSV: không đọc được dữ liệu khối thẻ.'}
-                </Typography.Text>
-              )}
-              <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                {error ? 'Dữ liệu lần quét cũ · Mất kết nối API. ' : ''}
-                MSSV đọc từ thẻ, chưa đối chiếu danh sách sinh viên. Xem kết quả điểm danh của lần quét ở thông báo bên trên.
-              </Typography.Paragraph>
-            </Card>
+            {!scan.mssv && (
+              <Typography.Text type="warning">
+                {scan.read_status === 'ok'
+                  ? 'Không tìm thấy MSSV đúng định dạng trong khối 4.'
+                  : 'Chưa đọc được MSSV: không đọc được dữ liệu khối thẻ.'}
+              </Typography.Text>
+            )}
             <Tag color={error ? 'default' : scan.read_status === 'ok' ? 'green' : 'orange'}>
               {error ? 'Dữ liệu cũ · Mất kết nối API' : scan.read_status === 'ok'
                 ? 'Đã đọc khối dữ liệu và nhận tại API'
@@ -120,7 +164,8 @@ export default function CardReaderPage() {
               { key: 'detail', label: 'Chi tiết từ thiết bị', children: scan.detail },
             ]} />
           </Flex>
-        )}
+          )}
+        </Flex>
         <Typography.Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0 }}>
           {lastChecked ? `API được kiểm tra lúc ${new Date(lastChecked).toLocaleTimeString('vi-VN')}. ` : ''}
           Dữ liệu bên trên là lần quét cuối đã lưu, không phải bằng chứng đầu đọc đang online.
