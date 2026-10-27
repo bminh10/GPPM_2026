@@ -776,7 +776,7 @@ export default function TimetablePage() {
         styles={{ body: { padding: 12 } }}
       >
         {referencesLoading ? (
-          <Flex justify="center" style={{ padding: 48 }}><Spin /></Flex>
+          <Flex justify="center" style={{ padding: 48 }}><Spin  /></Flex>
         ) : !selectedSemesterId ? (
           <Empty description="Chưa có học kỳ để hiển thị thời khóa biểu" />
         ) : scheduleLoading ? (

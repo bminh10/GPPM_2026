@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
-import { Button, Flex, Layout, Space } from 'antd'
+import { Button, Flex, Layout, Popconfirm, Space } from 'antd'
 import { BookOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ROUTE_PATHS } from '../../routes/menuConfig'
@@ -61,9 +61,17 @@ export default function AppHeader({ collapsed, onToggle }: AppHeaderProps) {
             Tài liệu
           </Button>
           <UserMenu />
-          <Button type="text" icon={<LogoutOutlined />} onClick={handleLogout}>
-            Đăng xuất
-          </Button>
+          <Popconfirm
+            title="Xác nhận đăng xuất"
+            description="Bạn có chắc chắn muốn đăng xuất không?"
+            onConfirm={handleLogout}
+            okText="Đăng xuất"
+            cancelText="Hủy"
+          >
+            <Button type="text" style={{color: 'red'}} icon={<LogoutOutlined />}>
+              Đăng xuất
+            </Button>
+          </Popconfirm>
         </Space>
       </Flex>
     </Layout.Header>

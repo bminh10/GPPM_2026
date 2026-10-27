@@ -13,7 +13,6 @@ import AuditLogsPage from '../pages/AuditLogs/AuditLogsPage'
 import TimetablePage from '../pages/Timetable/TimetablePage'
 import ProfilePage from '../pages/Profile/ProfilePage'
 import AdminUsersPage from '../pages/AdminUsers/AdminUsersPage'
-import BuildingGeoJSONTest from '../pages/Map3DTest/BuildingGeoJSONTest'
 import CardReaderPage from '../pages/CardReader/CardReaderPage'
 import CardWriterPage from '../pages/CardWriter/CardWriterPage'
 import DocumentationPage from '../pages/Documentation/DocumentationPage'
@@ -50,10 +49,6 @@ export const route = createBrowserRouter([
           {
             path: ROUTE_PATHS.cardWriter,
             element: <RoleRoute roles={infrastructureRoles}><CardWriterPage /></RoleRoute>,
-          },
-          {
-            path: '/map3d-test',
-            element: <RoleRoute roles={adminRoles}><BuildingGeoJSONTest /></RoleRoute>,
           },
           {
             path: ROUTE_PATHS.timetable,

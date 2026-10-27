@@ -202,7 +202,7 @@ export default function AdminUsersPage() {
         title: 'Chức vụ / quyền',
         dataIndex: 'role',
         key: 'role',
-        render: (role: string | null) => role ?? 'Chưa phân quyền',
+        render: (role: string | null) => <Tag color={'gold'}>{role ?? 'Chưa phân quyền'}</Tag>,
       },
       {
         title: 'Trạng thái',
