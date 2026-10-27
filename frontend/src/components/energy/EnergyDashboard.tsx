@@ -281,15 +281,6 @@ export default function EnergyDashboard({
               render: (_, room) =>
                 formatEnergy(room.known_seconds > 0 ? room.energy_kwh : null),
             },
-            {
-              title: 'Dữ liệu',
-              render: (_, room) =>
-                room.unknown_seconds > 0
-                  ? 'Có thời gian thiếu dữ liệu'
-                  : room.known_seconds > 0
-                    ? 'Đã ghi nhận'
-                    : 'Chưa có xác nhận',
-            },
           ]}
         />
     </Card>
