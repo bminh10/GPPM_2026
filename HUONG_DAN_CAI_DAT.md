@@ -240,7 +240,7 @@ Mở `iot\card-reader` bằng VS Code có PlatformIO. Thư viện được khai 
 - `miguelbalboa/MFRC522@1.4.12`
 - `bblanchon/ArduinoJson@7.4.2`
 
-Build và nạp bằng PlatformIO: Upload.
+Sau khi tạo cấu hình ở mục 5.3, chọn **PlatformIO: Upload** để build và nạp firmware vào board qua USB.
 
 ### 5.3. Cấu hình trạm trên máy chạy backend
 
@@ -257,6 +257,27 @@ Script tạo khóa thiết bị và chạy khởi tạo trạm từ thư mục `
 
 Sau đó đăng nhập Admin/Super Admin, mở menu **Đọc thẻ** trên website.
 
+### 5.4. Đổi Wi-Fi cho board
+
+Wi-Fi của board được lưu trong firmware, độc lập với Wi-Fi của máy tính. Nếu mang board đến nơi khác hoặc mạng cũ đổi tên/mật khẩu, thực hiện:
+
+1. Mở tệp `iot\card-reader\DeviceLocal.h` đã được tạo ở mục 5.3.
+2. Chỉ sửa hai dòng sau thành tên và mật khẩu Wi-Fi mới (giữ dấu ngoặc kép):
+
+   ```cpp
+   #define READER_WIFI_SSID "TEN_WIFI_MOI"
+   #define READER_WIFI_PASSWORD "MAT_KHAU_WIFI_MOI"
+   ```
+
+3. Dùng mạng **2.4 GHz**; board không kết nối được mạng chỉ phát băng tần 5 GHz.
+4. Giữ nguyên các cấu hình khác, đặc biệt là `READER_ID` và `READER_DEVICE_KEY`. Không cần chạy lại `setup.ps1` hay đăng ký lại trạm khi chỉ đổi Wi-Fi.
+5. Kết nối board với máy tính bằng cáp USB truyền dữ liệu. Mở thư mục `iot\card-reader` trong VS Code, chọn **PlatformIO: Upload** để build và nạp lại firmware. Chỉ lưu tệp cấu hình mà chưa nạp lại thì board vẫn dùng Wi-Fi cũ.
+6. Mở **PlatformIO: Serial Monitor** ở tốc độ **115200 baud** để kiểm tra kết nối, rồi thử quét thẻ trên website.
+
+Nếu backend đã triển khai trên Internet và địa chỉ không đổi, giữ nguyên `READER_API_URL`; máy tính và board không cần cùng Wi-Fi. Nếu backend chạy trên máy tính bằng địa chỉ IP nội bộ, board phải truy cập được mạng đó; cập nhật `READER_API_URL` nếu địa chỉ IP của máy chạy backend thay đổi.
+
+Không đưa tệp `DeviceLocal.h` lên GitHub hoặc chia sẻ công khai vì tệp chứa mật khẩu Wi-Fi và khóa thiết bị.
+
 ---
 
 ## 6. Thiết lập trạm ghi thẻ
@@ -267,6 +288,10 @@ Trạm ghi thẻ dùng **ESP32-S3** (YOLO UNO) và module RC522 thật, nạp fi
 cd iot\card-writer
 .\setup.ps1
 ```
+
+Sau khi script tạo cấu hình, mở thư mục `iot\card-writer` trong VS Code và chọn **PlatformIO: Upload** để nạp firmware vào board qua USB.
+
+**Đổi Wi-Fi cho trạm ghi thẻ:** thực hiện tương tự mục 5.4, nhưng sửa tệp `iot\card-writer\DeviceLocal.h` và nạp firmware từ thư mục `iot\card-writer`. Hai trạm có cấu hình riêng; đổi Wi-Fi cho trạm đọc không tự đổi Wi-Fi cho trạm ghi.
 
 Sau khi cấu hình xong, đăng nhập Admin/Super Admin và mở menu **Cấp thẻ** (`/card-writer`) để ghi MSSV lên thẻ.
 
