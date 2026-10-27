@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 export type AppRole = 'super_admin' | 'admin' | 'technician' | 'staff' | 'unknown'
 
 export function getAppRole(roleName: string | null | undefined): AppRole {

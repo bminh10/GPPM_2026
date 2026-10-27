@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useState } from 'react'
 import { Avatar, Button, Descriptions, Flex, Popover, Tag, Typography } from 'antd'
 import { UserOutlined, UserSwitchOutlined } from '@ant-design/icons'

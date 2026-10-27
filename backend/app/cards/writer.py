@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 """Admin-authorized, UID-bound single-use card writes."""
 import hashlib
 import hmac

@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { ConfigProvider } from 'antd'
 import { RouterProvider } from 'react-router-dom'
 import { antdTheme } from './theme/colors'

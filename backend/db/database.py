@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import os
 from dotenv import load_dotenv
 from sqlalchemy import (

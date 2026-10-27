@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { Input } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
 import type { InputProps } from 'antd'

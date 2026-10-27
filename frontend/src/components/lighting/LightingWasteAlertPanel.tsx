@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { Alert, Button, Card, Empty, Flex, Spin, Tag, Typography } from 'antd'
 import { BulbFilled, WarningOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'

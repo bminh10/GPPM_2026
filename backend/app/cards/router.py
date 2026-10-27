@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 """Read-only card scans and campus attendance delivery. No student verification."""
 import json
 import hashlib

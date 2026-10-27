@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import time
 from datetime import date, datetime
 from typing import Annotated

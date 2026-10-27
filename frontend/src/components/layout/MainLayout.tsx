@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useState } from 'react'
 import { Layout } from 'antd'
 import { Outlet } from 'react-router-dom'

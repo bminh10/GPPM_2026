@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { normalizeRoomCode } from '../data/campusData'

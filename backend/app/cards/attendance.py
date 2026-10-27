@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 """Campus-wide card scan sessions; no student registry or identity verification."""
 import os
 import time

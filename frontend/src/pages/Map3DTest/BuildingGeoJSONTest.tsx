@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useCallback, useMemo, useState } from 'react'
 import { Alert, Button, Card, Descriptions, Flex, Progress, Segmented, Select, Tag, Typography } from 'antd'
 import { GlobalOutlined } from '@ant-design/icons'

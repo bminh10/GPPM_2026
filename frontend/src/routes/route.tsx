@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { Navigate, createBrowserRouter } from 'react-router-dom'
 import MainLayout from '../components/layout/MainLayout'
 import Dashboard from '../pages/Dashboard/Dashboard'

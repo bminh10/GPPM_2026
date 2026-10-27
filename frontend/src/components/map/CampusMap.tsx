@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MapGL, { useControl, type MapRef } from 'react-map-gl/maplibre'
 import { MapboxOverlay, type MapboxOverlayProps } from '@deck.gl/mapbox'

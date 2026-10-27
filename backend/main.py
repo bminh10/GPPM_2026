@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

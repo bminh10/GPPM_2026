@@ -1,4 +1,5 @@
 
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { Image } from 'antd'
 import logo from '../../assets/logo.png'
 

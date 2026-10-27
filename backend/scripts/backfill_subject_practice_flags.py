@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.subjects.subject_rules import configured_practical_subject_codes

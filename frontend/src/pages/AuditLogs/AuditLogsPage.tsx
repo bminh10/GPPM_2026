@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Card, Space, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'

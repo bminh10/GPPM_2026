@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 param(
     [Parameter(Mandatory = $true)][string]$Project,
     [string]$DeviceId,

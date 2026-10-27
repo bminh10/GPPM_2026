@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { commandLight, getLights, lightAddress, type LightStatus } from '../services/LightingService'
 import { getErrorMessage } from '../services/apiClient'

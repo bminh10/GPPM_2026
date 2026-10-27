@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 """Run explicitly: python -m app.lighting.provision --help."""
 import argparse
 import hashlib

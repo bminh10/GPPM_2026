@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { Button, Card, Flex } from 'antd'
 import { GlobalOutlined } from '@ant-design/icons'
 import type { Building } from '../../data/campusData'
