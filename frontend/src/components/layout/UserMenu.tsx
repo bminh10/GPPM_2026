@@ -1,17 +1,22 @@
 // Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useState } from 'react'
-import { Avatar, Button, Descriptions, Flex, Popover, Tag, Typography } from 'antd'
-import { UserOutlined, UserSwitchOutlined } from '@ant-design/icons'
+import { Avatar, Button, Descriptions, Flex, Popconfirm, Popover, Tag, Typography } from 'antd'
+import { LogoutOutlined, UserOutlined, UserSwitchOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../store/authStore'
 import { ROUTE_PATHS } from '../../routes/menuConfig'
+import { logOut } from '../../services/AuthService'
 
 export default function UserMenu() {
   const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
   if (!user) return null
-
+  
+  const handleLogout = async () => {
+    await logOut().catch(() => undefined)
+    navigate(ROUTE_PATHS.signIn, { replace: true })
+  }
   const content = (
     <Flex vertical gap={12} style={{ width: 260 }}>
       <Flex align="center" gap={12}>
@@ -43,6 +48,17 @@ export default function UserMenu() {
       >
         Hồ sơ cá nhân
       </Button>
+      <Popconfirm
+        title="Xác nhận đăng xuất"
+        description="Bạn có chắc chắn muốn đăng xuất không?"
+        onConfirm={handleLogout}
+        okText="Đăng xuất"
+        cancelText="Hủy"
+      >
+        <Button type="text" style={{ color: 'red' }} icon={<LogoutOutlined />}>
+          Đăng xuất
+        </Button>
+      </Popconfirm>
     </Flex>
   )
 
