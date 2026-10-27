@@ -17,11 +17,13 @@ Dự án luôn hoan nghênh sự đóng góp từ cộng đồng. Nếu bạn c�
 Dự án được phát hành theo giấy phép [MIT](./LICENSE). Bạn được tự do sử dụng, sao chép, sửa đổi và phân phối mã nguồn, miễn là giữ nguyên thông báo bản quyền và toàn văn giấy phép.
 
 ### 🛠️ Công cụ mã nguồn mở sử dụng
-* **Quản lý mã nguồn:** Git, GitHub
+* **Quản lý mã nguồn:** Git
 * **Backend:** Python, FastAPI, SQLAlchemy, Uvicorn, OR-Tools
 * **Frontend:** React, TypeScript, Vite, Ant Design, MapLibre GL, deck.gl
 * **Thiết bị IoT:** PlatformIO, ESP32 (Arduino framework)
 * **Tài liệu:** Markdown
+
+Mã nguồn được lưu trữ công khai trên GitHub; đây là nền tảng lưu trữ và cộng tác, không phải công cụ mã nguồn mở.
 
 ### 🔧 Build từ mã nguồn
 Xem hướng dẫn đầy đủ tại [HUONG_DAN_CAI_DAT.md](./HUONG_DAN_CAI_DAT.md). Nếu đã cài `make`, có thể dùng [Makefile](./Makefile) để chạy các lệnh build và cài đặt thường dùng, ví dụ `make help`.
