@@ -40,8 +40,6 @@ def create_user(
         )
     if db.query(User).filter(User.email == data.email).first() is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Email đã được sử dụng")
-    if db.query(User).filter(User.user_name == data.user_name).first() is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Tên tài khoản đã tồn tại")
 
     role = db.get(Role, data.role_id)
     if role is None:
