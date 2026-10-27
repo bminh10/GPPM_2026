@@ -87,8 +87,8 @@ Yêu cầu thêm: Docker Desktop đang chạy. Có hai cách lấy image.
 
 ```powershell
 docker login -u tbmtmt0609
-docker pull tbmtmt0609/gppm-backend:cs3-b101-test
-docker tag tbmtmt0609/gppm-backend:cs3-b101-test smartou-backend
+docker pull tbmtmt0609/gppm-backend:cs3-b101-test3
+docker tag tbmtmt0609/gppm-backend:cs3-b101-test3 smartou-backend
 ```
 
 Image Docker Hub là repository **Private**. Cần đăng nhập bằng tài khoản được nhóm cấp quyền. Nếu chưa có quyền, dùng cách 2.
