@@ -105,7 +105,7 @@ Chọn đúng cơ sở **CS3**, phòng **B101** trên website. Chờ board onlin
 báo GPIO trước khi điều khiển. Điện năng tự tính theo xác nhận từ board.
 
 Muốn dùng HTTPS public hoặc cần hướng dẫn cài extension, xem
-[hướng dẫn IoT](README.md).
+[hướng dẫn cài đặt](../HUONG_DAN_CAI_DAT.md).
 
 ## Khi mở rộng hoặc đổi cấu hình
 
