@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { Layout, Menu, Flex, Typography } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { getMenuItems, ROUTE_PATHS } from '../../routes/menuConfig'

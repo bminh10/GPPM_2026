@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useState } from 'react'
 import { Badge, Button, Empty, Flex, Popover, Tag, Typography } from 'antd'
 import { BellOutlined, BulbFilled } from '@ant-design/icons'

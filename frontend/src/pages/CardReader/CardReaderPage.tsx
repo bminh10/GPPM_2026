@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Descriptions, Flex, Tag, Typography } from 'antd'
 import { EyeInvisibleOutlined, EyeOutlined, ScanOutlined } from '@ant-design/icons'

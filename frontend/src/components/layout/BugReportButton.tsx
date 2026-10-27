@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { Button, Popover, Space, Typography } from 'antd'
 import { BugOutlined } from '@ant-design/icons'
 

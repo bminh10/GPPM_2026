@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { Button, Card, Descriptions, Flex, Progress, Switch, Tag, Typography, Collapse, Tooltip, Alert, Spin } from 'antd'
 import { BulbFilled, CloseOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { ROOM_STATE_META, getRoomState, type Room } from '../../data/campusData'

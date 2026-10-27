@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import hmac
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -29,8 +30,7 @@ def _password_matches(user: User, password: str, db: Session) -> bool:
 def register(data: RegisterRequest, response: Response, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status.HTTP_409_CONFLICT, "Email đã được sử dụng")
-    if db.query(User).filter(User.user_name == data.user_name).first():
-        raise HTTPException(status.HTTP_409_CONFLICT, "Tên tài khoản đã tồn tại")
+    
 
     # Vai trò luôn do server quyết định, không nhận từ client
     user = commit_db(

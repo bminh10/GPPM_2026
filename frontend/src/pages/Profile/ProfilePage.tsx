@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { Avatar, Card, Col, Descriptions, Flex, Row, Tag, Typography } from 'antd'
 import { CheckCircleOutlined, MailOutlined, UserOutlined } from '@ant-design/icons'
 import { useAuth } from '../../store/authStore'

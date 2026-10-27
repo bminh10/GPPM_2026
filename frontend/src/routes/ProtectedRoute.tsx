@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { Navigate, Outlet } from 'react-router-dom'

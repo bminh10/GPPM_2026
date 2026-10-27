@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useMemo, useState } from 'react'
 import { Button, Popconfirm, Space, Table, message } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'

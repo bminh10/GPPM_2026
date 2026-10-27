@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import type { ThemeConfig } from 'antd'
 import { FONT_FAMILY } from './font'
 
