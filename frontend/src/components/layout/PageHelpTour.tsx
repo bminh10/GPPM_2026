@@ -65,7 +65,7 @@ const pageGuides: Record<string, GuideStep[]> = {
   [ROUTE_PATHS.userManagement]: [
     guideStep('users-create-button', 'Tạo tài khoản', 'Nhấn “Tạo tài khoản”, nhập họ tên, email đăng nhập, mật khẩu SmartOU và vai trò. Không nhập mật khẩu hộp thư email.'),
     guideStep('users-list', 'Tìm tài khoản', 'Tìm theo tên, email, vai trò hoặc trạng thái; bảng hiển thị thông tin và phân trang.'),
-    guideStep('users-list', 'Cập nhật và phân quyền', 'Dùng “Sửa” để cập nhật thông tin hoặc vai trò; chuyển trạng thái để vô hiệu hóa/kích hoạt. Không thể tự vô hiệu hóa tài khoản đang đăng nhập.'),
+    guideStep('users-list', 'Cập nhật và phân quyền', 'Dùng “Sửa” để cập nhật thông tin hoặc vai trò. Admin có thể kích hoạt tài khoản; chỉ Super Admin được vô hiệu hóa tài khoản. Không thể tự vô hiệu hóa tài khoản đang đăng nhập.'),
   ],
   [ROUTE_PATHS.auditLogs]: [
     guideStep('audit-log-table', 'Đọc nhật ký hoạt động', 'Mỗi dòng gồm thời gian, phương thức, đường dẫn API, mã trạng thái và thông tin chi tiết nếu có.'),
