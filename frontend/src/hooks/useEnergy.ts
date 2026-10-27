@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useCallback, useEffect, useState } from 'react'
 import { getEnergy, type EnergySummary } from '../services/EnergyService'
 import { getErrorMessage } from '../services/apiClient'

@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 #include <assert.h>
 #include <stdio.h>
 #include "../include/CardPayload.h"

@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useEffect, useRef } from 'react'
 import { BarChart, HeatmapChart, PieChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent, VisualMapComponent } from 'echarts/components'

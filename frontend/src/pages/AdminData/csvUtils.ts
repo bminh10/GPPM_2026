@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 export type CsvRow = { cells: string[]; line: number }
 
 export function parseCsv(text: string): CsvRow[] {

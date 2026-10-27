@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 from dataclasses import dataclass, field
 from datetime import date, time, timedelta
 from functools import lru_cache

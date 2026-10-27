@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'

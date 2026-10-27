@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 from typing import TypeVar
 from sqlalchemy.orm import Session
 

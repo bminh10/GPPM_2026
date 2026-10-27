@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Alert, Button, Card, Col, Empty, Flex, Input, Row, Select, Spin, Statistic, Table, Tooltip, Typography } from 'antd'

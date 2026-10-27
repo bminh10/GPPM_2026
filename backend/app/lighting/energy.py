@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 """Energy estimates from confirmed GPIO states, never electrical measurements."""
 import argparse
 import math

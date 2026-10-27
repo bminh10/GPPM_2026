@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { booleanPointInPolygon, point, polygon } from '@turf/turf'
 import type { LngLat } from './campusData'
 import defaults from './lightingDefaults.json' with { type: 'json' }

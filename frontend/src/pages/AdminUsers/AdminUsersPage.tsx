@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,

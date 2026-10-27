@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 param([switch]$SkipWifi, [ValidateSet("reader", "writer")][string]$Role = "reader")
 $ErrorActionPreference = "Stop"
 $backend = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "backend"

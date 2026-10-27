@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 

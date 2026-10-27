@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { Badge, Card, Flex } from 'antd'
 import { ROOM_STATE_META } from '../../data/campusData'
 

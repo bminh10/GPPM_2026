@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
