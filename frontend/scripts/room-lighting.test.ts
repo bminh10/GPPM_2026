@@ -62,7 +62,7 @@ test('placement supports concave rooms and configurable light counts', () => {
 })
 
 test('generated projects agree on room, device, light IDs and GPIOs without touching DB', async () => {
-  for (const [campus, room] of [['CS1', 'V101'], ['CS3', 'B101']]) {
+  for (const [campus, room] of [['CS1', 'A121'], ['CS3', 'B101']]) {
     const plan = await createDevicePlan(campus, room, `${campus}-${room}`.toLowerCase())
     assert.equal(plan.device.campusId, campus)
     assert.equal(plan.device.roomId, room)
