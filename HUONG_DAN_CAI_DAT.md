@@ -2,8 +2,6 @@
 
 Tài liệu này hướng dẫn cài đặt và chạy hệ thống Smart OU trên máy Windows, gồm: website, backend, đèn phòng mô phỏng bằng Wokwi, trạm đọc thẻ và trạm ghi thẻ RC522.
 
-Video demo sản phẩm: [LINK VIDEO DEMO]
-
 ---
 
 ## 1. Yêu cầu
@@ -108,7 +106,6 @@ docker run --rm -p 8000:8000 -e PORT=8000 smartou-backend
 Container dùng cổng `PORT` (mặc định `10000`). Lệnh trên map cổng `8000` để khớp với Wokwi và frontend local. Kiểm tra `http://localhost:8000/health` trả `{"status":"OK"}`.
 
 Image đã chứa sẵn `backend\.env` (theo [.dockerignore](d:/GPPM_2026/.dockerignore)), nên không cần `--env-file`. Điều này nghĩa là image mang theo secret: ai có image là có chuỗi kết nối database, `JWT_SECRET` và `HASH_KEY`. Không chia sẻ image cho người ngoài nhóm. Chi tiết đẩy image và triển khai Render xem [backend\DOCKER.md](d:/GPPM_2026/backend/DOCKER.md).
-
 ---
 
 ## 3. Cài frontend
@@ -161,7 +158,7 @@ Lệnh tạo thư mục `iot\light-room\cs3-b101`, gồm `platformio.ini`, `Devi
 
 ### 4.4. Đăng ký thiết bị với backend
 
-> **Chỉ chạy khi đã thống nhất với nhóm và đúng database.** Bước này ghi database. Nếu Device ID đã tồn tại, đăng ký sẽ thay khóa của thiết bị cũ.
+> **Kiểm tra `DATABASE_URL` trỏ đến đúng cơ sở dữ liệu trước khi chạy.** Bước này ghi dữ liệu vào cơ sở dữ liệu. Nếu Device ID đã tồn tại, đăng ký sẽ thay khóa của thiết bị cũ. Nếu dùng chung cơ sở dữ liệu với người khác, hãy trao đổi với người quản trị hệ thống trước khi thực hiện để tránh gián đoạn thiết bị đang hoạt động.
 
 Từ thư mục gốc repository, với backend đang dùng đúng `DATABASE_URL`:
 
@@ -184,13 +181,13 @@ node .\scripts\register-campus-lighting.ts --write
 pio run --project-dir .\iot\light-room\cs3-b101
 ```
 
-Lệnh tạo file `.pio\build\esp32\firmware.bin` và `firmware.elf` trong thư mục project.
+Lệnh tạo file `.pio\build\esp32\firmware.elf` trong thư mục project. Trên wokwi.com chỉ cần file `firmware.elf`, không cần file `.bin`.
 
 ### 4.6. Chạy mô phỏng trên wokwi.com
 
 1. Mở [wokwi.com](https://wokwi.com), chọn **New Project** → **ESP32**.
 2. Mở tab `diagram.json`, dán nội dung từ `iot\light-room\cs3-b101\diagram.json`.
-3. Thêm file `firmware.bin` và `firmware.elf` từ thư mục `.pio\build\esp32` (nút **+** hoặc kéo thả).
+3. Thêm file `firmware.elf` từ thư mục `iot\light-room\cs3-b101\.pio\build\esp32` (nút **+** hoặc kéo thả). Không cần merge hay thêm file `.bin`.
 4. Bấm **Start the simulation**.
 
 Trên website, chọn **CS3** → **B101**. Khi board báo trực tuyến và đã báo GPIO, có thể điều khiển đèn.
@@ -214,8 +211,8 @@ Trên website, chọn **CS3** → **B101**. Khi board báo trực tuyến và đ
 - Thay số lượng hoặc vị trí đèn của một phòng: cập nhật `properties.lights` trong dữ liệu phòng.
 - Thêm cơ sở: thêm thư mục GeoJSON và bản ghi trong `campusSources.json`.
 - Đổi mẫu chung: sửa `lightingDefaults.json`. Các board đã tạo **không tự thay đổi**; cần đồng bộ lại firmware, diagram, metadata và đăng ký DB.
-- Backend hiện không có luồng gỡ đèn/thiết bị. Không xóa đèn đã đăng ký chỉ bằng cách bỏ khỏi dữ liệu.
-- Không chạy đồng loạt toàn bộ simulator. Chỉ chạy các board cần trình diễn; các phòng khác giữ trạng thái chưa đăng ký hoặc offline.
+- Hệ thống hiện chưa hỗ trợ thao tác xóa đèn hoặc thiết bị đã đăng ký với backend. Việc xóa thông tin đèn khỏi tệp GeoJSON **không xóa** bản ghi tương ứng trong cơ sở dữ liệu.
+- Khi thử nghiệm hoặc trình diễn, chỉ mở và chạy mô phỏng Wokwi của những phòng cần sử dụng, không cần chạy tất cả các phòng cùng lúc. Các phòng chưa đăng ký thiết bị với backend sẽ chưa có kết nối; thiết bị đã đăng ký nhưng không chạy mô phỏng sẽ ở trạng thái ngoại tuyến (offline).
 
 ---
 

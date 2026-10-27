@@ -1,5 +1,8 @@
 📘 **Hướng dẫn cài đặt:** xem [HUONG_DAN_CAI_DAT.md](./HUONG_DAN_CAI_DAT.md).
 
+### Video demo
+[Xem video demo sản phẩm trên Google Drive](https://drive.google.com/file/d/1xJNkOYs0DBxALaAglNT9ZqCW89D8mMiC/view).
+
 ### 💬 Hỗ trợ & Kênh giao tiếp
 Dự án luôn hoan nghênh sự đóng góp từ cộng đồng. Nếu bạn có thắc mắc hoặc góp ý, vui lòng liên hệ qua các kênh công khai sau:
 * **Báo cáo lỗi (Bug Tracker):** Nếu phát hiện lỗi phần mềm, vui lòng tạo một báo cáo chi tiết tại tab [Issues](https://github.com/bminh10/GPPM_2026/issues).
