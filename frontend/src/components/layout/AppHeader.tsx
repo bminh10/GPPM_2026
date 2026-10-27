@@ -22,11 +22,6 @@ export default function AppHeader({ collapsed, onToggle }: AppHeaderProps) {
   const { user } = useAuth()
   const isStaff = getAppRole(user?.role) === 'staff'
 
-  const handleLogout = async () => {
-    await logOut().catch(() => undefined)
-    navigate(ROUTE_PATHS.signIn, { replace: true })
-  }
-
   return (
     <Layout.Header
       id="app-header-tour"
@@ -61,17 +56,6 @@ export default function AppHeader({ collapsed, onToggle }: AppHeaderProps) {
             Tài liệu
           </Button>
           <UserMenu />
-          <Popconfirm
-            title="Xác nhận đăng xuất"
-            description="Bạn có chắc chắn muốn đăng xuất không?"
-            onConfirm={handleLogout}
-            okText="Đăng xuất"
-            cancelText="Hủy"
-          >
-            <Button type="text" style={{color: 'red'}} icon={<LogoutOutlined />}>
-              Đăng xuất
-            </Button>
-          </Popconfirm>
         </Space>
       </Flex>
     </Layout.Header>
