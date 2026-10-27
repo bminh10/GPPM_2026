@@ -55,7 +55,7 @@ export default function UserMenu() {
       open={open}
       onOpenChange={setOpen}
     >
-      <Flex align="center" gap={8} style={{ cursor: 'pointer' }}>
+      <Flex align="center" gap={8} style={{ cursor: 'pointer', padding: '4px 8px', borderRadius: 4 }} className="shadow-2xl border-2">
         <Typography.Text strong>{user.user_name}</Typography.Text>
         <Avatar icon={<UserOutlined />} style={{ background: 'var(--color-primary)' }} />
       </Flex>

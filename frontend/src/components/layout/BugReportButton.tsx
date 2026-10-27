@@ -19,7 +19,7 @@ const content = (
 export default function BugReportButton() {
   return (
     <Popover content={content} trigger="click" placement="bottomRight">
-      <Button type="text" icon={<BugOutlined />}>
+      <Button type="primary" style={{backgroundColor: 'red'}} icon={<BugOutlined />}>
         Báo lỗi
       </Button>
     </Popover>

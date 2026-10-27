@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import MapGL, { useControl, type MapRef } from 'react-map-gl/maplibre'
 import { MapboxOverlay, type MapboxOverlayProps } from '@deck.gl/mapbox'
 import { IconLayer, PathLayer, PolygonLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers'
-import EnvironmentOutlined from '@ant-design/icons-svg/es/asn/EnvironmentOutlined'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { colors, hexToRgba } from '../../theme/colors'
 import { FONT_FAMILY } from '../../theme/font'
@@ -21,30 +20,12 @@ import {
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
 const PLATE_THICKNESS = 0.4
 const VERTICAL_EXAGGERATION = 2.5
-const iconNode = EnvironmentOutlined.icon
-const environmentIconNode =
-  typeof iconNode === 'function' ? iconNode('#000000', '#000000') : iconNode
-
-type IconNode = { tag: string; attrs: Record<string, string>; children?: IconNode[] }
-
-function serializeIconNode(node: IconNode): string {
-  const attrs = Object.entries(node.attrs)
-    .map(([name, value]) => `${name}="${value}"`)
-    .join(' ')
-  const children = node.children
-    ?.map(serializeIconNode)
-    .join('')
-  return `<${node.tag}${attrs ? ` ${attrs}` : ''}>${children ?? ''}</${node.tag}>`
-}
-
-const environmentIconUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="${environmentIconNode.attrs.viewBox}">${environmentIconNode.children
-    ?.map((node) => serializeIconNode(node))
-    .join('')}</svg>`,
+const buildingPinIconUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="white" fill-rule="evenodd" d="M12 22s8-4.5 8-12a8 8 0 1 0-16 0c0 7.5 8 12 8 12zm0-10a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>',
 )}`
-const environmentIcon = {
-  id: 'environment',
-  url: environmentIconUrl,
+const buildingPinIcon = {
+  id: 'building-pin',
+  url: buildingPinIconUrl,
   width: 24,
   height: 24,
   anchorX: 12,
@@ -297,22 +278,22 @@ export default function CampusMap({
         jointRounded: true,
         capRounded: true,
       }),
-      new TextLayer({
-        id: 'campus-name',
-        data: [{ position: nameAnchor }],
-        characterSet: 'auto',
-        fontFamily: FONT_FAMILY,
-        fontWeight: 700,
-        getPosition: (d) => d.position,
-        getText: () => campus.name,
-        getSize: 13,
-        getColor: hexToRgba(colors.primary.dark),
-        getPixelOffset: [0, -14],
-        background: true,
-        getBackgroundColor: hexToRgba('#ffffff', 235),
-        backgroundPadding: [8, 4],
-        billboard: true,
-      }),
+      // new TextLayer({
+      //   id: 'campus-name',
+      //   data: [{ position: nameAnchor }],
+      //   characterSet: 'auto',
+      //   fontFamily: FONT_FAMILY,
+      //   fontWeight: 700,
+      //   getPosition: (d) => d.position,
+      //   getText: () => campus.name,
+      //   getSize: 13,
+      //   getColor: hexToRgba(colors.primary.dark),
+      //   getPixelOffset: [0, -14],
+      //   background: true,
+      //   getBackgroundColor: hexToRgba('#ffffff', 235),
+      //   backgroundPadding: [8, 4],
+      //   billboard: true,
+      // }),
       new PolygonLayer({
         id: 'building-shells',
         data: shells,
@@ -467,12 +448,12 @@ export default function CampusMap({
       new IconLayer({
         id: 'building-hotspots',
         data: BUILDINGS,
-        getIcon: () => environmentIcon,
+        getIcon: () => buildingPinIcon,
         getPosition: (b) =>
           [...b.center, b.floors * b.floorHeight * VERTICAL_EXAGGERATION + 4 + hotspotOffset] as [number, number, number],
         getSize: 24,
         sizeUnits: 'pixels',
-        getColor: hexToRgba(colors.primary.dark),
+        getColor: hexToRgba('#ef4444'),
         getPixelOffset: [0, -36],
         billboard: true,
         pickable: true,
