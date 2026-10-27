@@ -208,6 +208,15 @@ Trên website, chọn **CS3** → **B101**. Khi board báo trực tuyến và đ
 - Chỉ tính khi đèn ở trạng thái bật.
 - Công suất lấy từ cấu hình đèn. Đèn chưa khai báo dùng `LIGHTING_DEFAULT_WATTS` (mặc định 20 W).
 
+### 4.8. Khi mở rộng hoặc đổi cấu hình
+
+- Thêm phòng: cập nhật GeoJSON; phòng tự có hai đèn trên web.
+- Thay số lượng hoặc vị trí đèn của một phòng: cập nhật `properties.lights` trong dữ liệu phòng.
+- Thêm cơ sở: thêm thư mục GeoJSON và bản ghi trong `campusSources.json`.
+- Đổi mẫu chung: sửa `lightingDefaults.json`. Các board đã tạo **không tự thay đổi**; cần đồng bộ lại firmware, diagram, metadata và đăng ký DB.
+- Backend hiện không có luồng gỡ đèn/thiết bị. Không xóa đèn đã đăng ký chỉ bằng cách bỏ khỏi dữ liệu.
+- Không chạy đồng loạt toàn bộ simulator. Chỉ chạy các board cần trình diễn; các phòng khác giữ trạng thái chưa đăng ký hoặc offline.
+
 ---
 
 ## 5. Thiết lập trạm đọc thẻ RC522

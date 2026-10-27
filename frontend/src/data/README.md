@@ -46,7 +46,7 @@ hay du lieu da dang ky trong database.
 
 Den tren ban do khong gia vo online: chua dang ky thi hien
 "Chua dang ky thiet bi", cong tac khong dieu khien duoc.
-Xem [huong dan tao board theo phong](../../../iot/ROOM_LIGHTING.md).
+Xem [hướng dẫn tạo board theo phòng](../../../HUONG_DAN_CAI_DAT.md#4-thiết-lập-đèn-phòng-bằng-wokwi).
 Khong tu dong dang ky hang tram board hay doi key tren database chung.
 
 Khoi Dien nang doc API `/lighting/energy`, khong tinh tich luy tren trinh duyet.
