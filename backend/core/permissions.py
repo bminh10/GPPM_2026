@@ -33,6 +33,10 @@ def get_role_key(name: str | None) -> str | None:
     return None
 
 
+def can_deactivate_accounts(role_name: str | None) -> bool:
+    return get_role_key(role_name) == "super_admin"
+
+
 def _matches_prefix(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(f"{prefix}/")
 

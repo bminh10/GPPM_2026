@@ -95,7 +95,7 @@ const features: GuideFeature[] = [
       'Dùng nút Sửa trên một tài khoản để cập nhật thông tin hoặc vai trò.',
       'Bật/tắt trạng thái để vô hiệu hóa hoặc kích hoạt tài khoản.',
     ],
-    tips: 'Không thể tự vô hiệu hóa tài khoản đang đăng nhập. Cán bộ nhân viên không được truy cập chức năng này.',
+    tips: 'Admin có thể kích hoạt tài khoản nhưng chỉ Super Admin được vô hiệu hóa tài khoản. Không thể tự vô hiệu hóa tài khoản đang đăng nhập.',
   },
   {
     id: 'timetable',

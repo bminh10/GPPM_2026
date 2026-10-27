@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
 from app.auth.schemas import AdminUserCreateRequest, UserResponse, UserUpdateRequest
+from core.permissions import can_deactivate_accounts, get_role_key
 from core.security import hash_password
 from db.database import Role, User, get_db
 
@@ -30,6 +31,13 @@ def create_user(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if data.is_active is False and not can_deactivate_accounts(
+        current_user.role.name if current_user.role else None
+    ):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Chỉ Super Admin mới có quyền tạo tài khoản ở trạng thái vô hiệu hóa.",
+        )
     if db.query(User).filter(User.email == data.email).first() is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Email đã được sử dụng")
     if db.query(User).filter(User.user_name == data.user_name).first() is not None:
@@ -38,6 +46,14 @@ def create_user(
     role = db.get(Role, data.role_id)
     if role is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Vai trò không tồn tại")
+    if (
+        get_role_key(current_user.role.name if current_user.role else None) == "admin"
+        and get_role_key(role.name) == "super_admin"
+    ):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Admin không có quyền tạo tài khoản Super Admin.",
+        )
 
     user = User(
         user_name=data.user_name,
@@ -68,7 +84,27 @@ def update_user(
 ):
     user = _get_user_or_404(user_id, db)
     changes = data.model_dump(exclude_unset=True, exclude_none=True)
+    current_role_key = get_role_key(current_user.role.name if current_user.role else None)
 
+    if (
+        current_role_key == "admin"
+        and get_role_key(user.role.name if user.role else None) == "super_admin"
+    ):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Admin không có quyền cập nhật tài khoản Super Admin.",
+        )
+
+    if (
+        changes.get("is_active") is False
+        and user.is_active
+        and user.id != current_user.id
+        and not can_deactivate_accounts(current_user.role.name if current_user.role else None)
+    ):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Chỉ Super Admin mới có quyền vô hiệu hóa tài khoản người khác.",
+        )
     if changes.get("is_active") is False and user.id == current_user.id:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -80,6 +116,11 @@ def update_user(
         new_role = db.get(Role, changes["role_id"])
         if not new_role:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Vai trò không tồn tại")
+        if current_role_key == "admin" and get_role_key(new_role.name) == "super_admin":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Admin không có quyền phân quyền Super Admin.",
+            )
     if "pass_word" in changes:
         changes["pass_word"] = hash_password(changes["pass_word"])
 

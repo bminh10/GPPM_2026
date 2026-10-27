@@ -20,6 +20,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 import SearchableTable from '../../components/common/SearchableTable'
+import { getAppRole } from '../../routes/roleAccess'
 import { useAuth } from '../../store/authStore'
 
 type RoleOption = { id: number; name: string }
@@ -84,6 +85,7 @@ function generatePassword(length = 16): string {
 
 export default function AdminUsersPage() {
   const { user: currentUser } = useAuth()
+  const isSuperAdmin = getAppRole(currentUser?.role) === 'super_admin'
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [roles, setRoles] = useState<RoleOption[]>([])
   const [loading, setLoading] = useState(true)
@@ -175,7 +177,9 @@ export default function AdminUsersPage() {
     ])
       .then(([rolesResponse, usersResponse]) => {
         if (!active) return
-        const availableRoles = rolesResponse.data.filter((role) => Boolean(role.name))
+      const availableRoles = rolesResponse.data.filter(
+        (role) => Boolean(role.name) && (isSuperAdmin || getAppRole(role.name) !== 'super_admin'),
+      )
         setRoles(availableRoles)
         const defaultRole = availableRoles.find((role) => role.name.trim().toLowerCase() === 'user')
         if (defaultRole && form.getFieldValue('role_id') === undefined) {
@@ -192,7 +196,7 @@ export default function AdminUsersPage() {
     return () => {
       active = false
     }
-  }, [form])
+  }, [form, isSuperAdmin])
 
   const columns = useMemo<ColumnsType<ManagedUser>>(
     () => [
@@ -223,14 +227,27 @@ export default function AdminUsersPage() {
               okText={isActive ? 'Vô hiệu hóa' : 'Kích hoạt'}
               cancelText="Hủy"
               okButtonProps={{ danger: isActive }}
-              disabled={record.id === currentUser?.id || updatingUserId !== null}
+              disabled={
+                record.id === currentUser?.id ||
+                (isActive && !isSuperAdmin) ||
+                updatingUserId !== null
+              }
               onConfirm={() => void updateUserStatus(record, !isActive)}
             >
               <Switch
                 size="small"
                 checked={isActive}
                 loading={updatingUserId === record.id}
-                disabled={record.id === currentUser?.id || updatingUserId !== null}
+                disabled={
+                  record.id === currentUser?.id ||
+                  (isActive && !isSuperAdmin) ||
+                  updatingUserId !== null
+                }
+                title={
+                  isActive && !isSuperAdmin
+                    ? 'Chỉ Super Admin mới có quyền vô hiệu hóa tài khoản'
+                    : undefined
+                }
                 aria-label={isActive ? 'Vô hiệu hóa tài khoản' : 'Kích hoạt tài khoản'}
               />
             </Popconfirm>
@@ -244,6 +261,12 @@ export default function AdminUsersPage() {
           <Button
             icon={<EditOutlined />}
             onClick={() => openEditModal(record)}
+            disabled={!isSuperAdmin && getAppRole(record.role) === 'super_admin'}
+            title={
+              !isSuperAdmin && getAppRole(record.role) === 'super_admin'
+                ? 'Chỉ Super Admin mới có quyền cập nhật tài khoản Super Admin'
+                : undefined
+            }
             aria-label={`Sửa tài khoản ${record.user_name}`}
           >
             Sửa
@@ -251,7 +274,7 @@ export default function AdminUsersPage() {
         ),
       },
     ],
-    [currentUser?.id, openEditModal, updatingUserId, updateUserStatus],
+    [currentUser?.id, isSuperAdmin, openEditModal, updatingUserId, updateUserStatus],
   )
 
   const handleCreate = async (values: CreateUserValues) => {
@@ -448,8 +471,17 @@ export default function AdminUsersPage() {
               placeholder="Chọn vai trò"
             />
           </Form.Item>
-          <Form.Item name="is_active" label="Trạng thái hoạt động" valuePropName="checked">
-            <Switch checkedChildren="Hoạt động" unCheckedChildren="Vô hiệu hóa" />
+          <Form.Item
+            name="is_active"
+            label="Trạng thái hoạt động"
+            valuePropName="checked"
+            extra={!isSuperAdmin ? 'Admin chỉ được tạo tài khoản đang hoạt động.' : undefined}
+          >
+            <Switch
+              checkedChildren="Hoạt động"
+              unCheckedChildren="Vô hiệu hóa"
+              disabled={!isSuperAdmin}
+            />
           </Form.Item>
           <Button
             type="primary"
@@ -535,11 +567,23 @@ export default function AdminUsersPage() {
           >
             <Input.Password autoComplete="new-password" placeholder="Nhập lại nếu đổi mật khẩu" />
           </Form.Item>
-          <Form.Item name="is_active" label="Trạng thái hoạt động" valuePropName="checked">
+          <Form.Item
+            name="is_active"
+            label="Trạng thái hoạt động"
+            valuePropName="checked"
+            extra={
+              editingUser?.is_active && !isSuperAdmin
+                ? 'Chỉ Super Admin mới có quyền vô hiệu hóa tài khoản.'
+                : undefined
+            }
+          >
             <Switch
               checkedChildren="Hoạt động"
               unCheckedChildren="Vô hiệu hóa"
-              disabled={editingUser?.id === currentUser?.id}
+              disabled={
+                editingUser?.id === currentUser?.id ||
+                (Boolean(editingUser?.is_active) && !isSuperAdmin)
+              }
             />
           </Form.Item>
         </Form>
