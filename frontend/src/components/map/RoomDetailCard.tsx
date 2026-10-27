@@ -77,17 +77,6 @@ export default function RoomDetailCard({
           { key: 'building', label: 'Tòa', children: activeClass?.room_building || buildingName },
           { key: 'floor', label: 'Tầng', children: `Tầng ${room.floor}` },
           { key: 'capacity', label: 'Số sinh viên / sức chứa', children: `${occupancy}/${roomCapacity} chỗ` },
-          {
-            key: 'equipment',
-            label: 'Thiết bị',
-            children: (
-              <Flex gap={4} wrap>
-                {room.equipment.map((e) => (
-                  <Tag key={e}>{e}</Tag>
-                ))}
-              </Flex>
-            ),
-          },
         ]}
       />
       {scheduleError ? (
@@ -121,6 +110,22 @@ export default function RoomDetailCard({
           {scheduleLoading ? 'Đang tải lịch học trong ngày đã chọn…' : 'Phòng không có lớp học trong ngày đã chọn.'}
         </Typography.Paragraph>
       )}
+      <Descriptions
+        size="small"
+        column={1}
+        style={{ marginBottom: 12 }}
+        items={[{
+          key: 'equipment',
+          label: 'Thiết bị',
+          children: (
+            <Flex gap={4} wrap>
+              {room.equipment.map((e) => (
+                <Tag key={e}>{e}</Tag>
+              ))}
+            </Flex>
+          ),
+        }]}
+      />
       {room.lights.length === 0 && (
         <Typography.Paragraph type="secondary">Chưa cấu hình đèn cho phòng này.</Typography.Paragraph>
       )}
