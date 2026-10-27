@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'

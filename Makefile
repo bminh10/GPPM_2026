@@ -1,10 +1,11 @@
-.PHONY: help backend-install backend-run backend-seed frontend-install frontend-dev frontend-build frontend-deploy docker-build docker-run
+.PHONY: help install backend-install backend-run backend-seed frontend-install frontend-dev frontend-build frontend-deploy docker-build docker-run
 
 PYTHON ?= python
 PORT ?= 8000
 
 help:
 	@echo "Các lệnh có sẵn:"
+	@echo "  make install           Cài đặt cả backend và frontend"
 	@echo "  make backend-install   Cài thư viện backend (tạo .venv trước)"
 	@echo "  make backend-run       Chạy backend tại cổng $(PORT)"
 	@echo "  make backend-seed      Nạp dữ liệu cơ sở và phòng mẫu"
@@ -14,6 +15,8 @@ help:
 	@echo "  make frontend-deploy   Build và deploy frontend lên Cloudflare"
 	@echo "  make docker-build      Build image backend từ thư mục gốc"
 	@echo "  make docker-run        Chạy image backend tại cổng $(PORT)"
+
+install: backend-install frontend-install
 
 backend-install:
 	cd backend && $(PYTHON) -m pip install -r requirements.txt

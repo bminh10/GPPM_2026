@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 #define DEVICE_ID "test-device"
 #define ROOM_ID "test-room"
 

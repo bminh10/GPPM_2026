@@ -97,9 +97,10 @@ export async function createDevicePlan(campusId: string, roomId: string, project
     files: {
       'device.json': JSON.stringify(device, null, 2) + '\n',
       'diagram.json': JSON.stringify(diagram, null, 2) + '\n',
-      'DeviceLights.h': '#pragma once\n\nconstexpr LightConfig LIGHTS[] = {\n' +
+      'DeviceLights.h': '// Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.\n#pragma once\n\nconstexpr LightConfig LIGHTS[] = {\n' +
         wiring.map((light) => `    {"${light.id}", ${light.ledPin}, ${light.buttonPin}},`).join('\n') + '\n};\n',
-      'platformio.ini': `[platformio]
+      'platformio.ini': `; Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
+[platformio]
 src_dir = ../firmware/src
 include_dir = ../firmware/include
 extra_configs = ../platformio-common.ini

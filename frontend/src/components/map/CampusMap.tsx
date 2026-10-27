@@ -241,11 +241,11 @@ export default function CampusMap({
       }
     }) : []
     const boundaryClosed = [...boundary, boundary[0]]
-    const nameAnchor: [number, number, number] = [
-      (boundary[0][0] + boundary[1][0]) / 2,
-      boundary[2][1],
-      0.5,
-    ]
+    // const nameAnchor: [number, number, number] = [
+    //   (boundary[0][0] + boundary[1][0]) / 2,
+    //   boundary[2][1],
+    //   0.5,
+    // ]
 
     return [
       new PolygonLayer({

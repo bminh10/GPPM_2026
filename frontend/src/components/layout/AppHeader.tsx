@@ -1,9 +1,8 @@
 // Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
-import { Button, Flex, Layout, Popconfirm, Space } from 'antd'
-import { BookOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
+import { Button, Flex, Layout, Space } from 'antd'
+import { BookOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ROUTE_PATHS } from '../../routes/menuConfig'
-import { logOut } from '../../services/AuthService'
 import UserMenu from './UserMenu'
 import PageHelpTour from './PageHelpTour'
 import BugReportButton from './BugReportButton'
