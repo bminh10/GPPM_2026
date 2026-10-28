@@ -5,13 +5,12 @@
 ## [1.0.0] - 2026-10-27
 
 ### Thêm mới
-- Xếp lịch phòng học tự động bằng OR-Tools CP-SAT, có cơ chế tối ưu thời gian chạy.
-- Bản đồ cơ sở và phòng học trực quan (MapLibre GL, deck.gl) kèm thẻ chi tiết phòng.
-- Điều khiển đèn phòng học qua ESP32 và WebSocket, đồng bộ hai chiều với backend.
-- Thống kê điện năng theo phòng và theo cơ sở, có cảnh báo khi thiếu dữ liệu.
-- Đọc thẻ RFID (RC522) và ghi thẻ sinh viên, điểm danh theo ngày và MSSV.
+- Xếp lịch phòng học tự động bằng OR-Tools CP-SAT.
+- Bản đồ cơ sở và phòng học trực quan (MapLibre GL, deck.gl).
+- Điều khiển đèn phòng học qua ESP32.
+- Thống kê điện năng theo phòng và theo cơ sở.
+- Đọc thẻ RFID (RC522) và ghi thẻ sinh viên, điểm danh theo phiên.
 - Đăng nhập bằng JWT, phân quyền theo vai trò.
-- Trang hướng dẫn và trang chủ cho người dùng không phải quản trị.
 - Hướng dẫn cài đặt đầy đủ, hỗ trợ chạy bằng Docker và mô phỏng Wokwi.
 
 ### Thay đổi
