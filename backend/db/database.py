@@ -16,6 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Text,
     create_engine,
+    event,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -35,6 +36,13 @@ for _prefix in ("postgres://", "postgresql://", "postgresql+psycopg://"):
         break
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
+
+
+@event.listens_for(engine, "begin")
+def set_public_search_path(connection):
+    connection.exec_driver_sql("SET LOCAL search_path TO public")
+
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
