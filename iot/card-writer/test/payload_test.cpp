@@ -5,14 +5,17 @@
 
 int main() {
   assert(isMssv("2451010000"));
-  assert(isMssv("2451019999"));
-  assert(!isMssv("245101xxxx"));
-  assert(!isMssv("245101123"));
-  assert(!isMssv("24510112345"));
-  assert(!isMssv("2451021234"));
+  assert(isMssv("SV-A_2026"));
+  assert(isMssv("1234567890123456"));
+  assert(!isMssv(""));
+  assert(!isMssv("12345678901234567"));
+  assert(!isMssv("HAS SPACE"));
   uint8_t bytes[16] = {};
   assert(replaceableBlock(bytes));
   memcpy(bytes, "2451010001", 10);
+  assert(replaceableBlock(bytes));
+  memset(bytes, 0, sizeof(bytes));
+  memcpy(bytes, "SV-A_2026", 9);
   assert(replaceableBlock(bytes));
   bytes[15] = 1;
   assert(!replaceableBlock(bytes));
@@ -21,5 +24,5 @@ int main() {
   memset(bytes, 0, 16);
   memcpy(bytes, "OTHER DATA", 10);
   assert(!replaceableBlock(bytes));
-  puts("PASS: MSSV format, leading zeros, blank/issued block and unrelated data protection.");
+  puts("PASS: MSSV format, blank/issued block and unrelated data protection.");
 }

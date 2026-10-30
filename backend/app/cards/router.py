@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
-"""Read-only card scans and campus attendance delivery. No student verification."""
+"""Read-only card scans and class attendance delivery. No student verification."""
 import json
 import hashlib
 import hmac
@@ -51,8 +51,10 @@ router = APIRouter(tags=["Card reader"])
 
 def read_mssv(report: ScanReport) -> str | None:
     data = bytes.fromhex(report.data_hex) if report.data_hex else b""
-    if report.read_status == "ok" and report.block == 4 and re.fullmatch(rb"245101[0-9]{4}\x00{6}", data):
-        return data[:10].decode("ascii")
+    if report.read_status == "ok" and report.block == 4 and len(data) == 16:
+        encoded = data.rstrip(b"\x00")
+        if encoded and re.fullmatch(rb"[A-Za-z0-9._-]{1,16}", encoded):
+            return encoded.decode("ascii")
     return None
 
 

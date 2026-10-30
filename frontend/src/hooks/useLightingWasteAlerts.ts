@@ -20,6 +20,7 @@ export type LightingWasteAlert = {
   campusName: string
   roomName: string
   lightCount: number
+  lights: LightStatus[]
 }
 
 export function localDate(value: Date) {
@@ -122,6 +123,7 @@ export function useLightingWasteAlerts() {
       campusName: room.name,
       roomName: room.room.name,
       lightCount: (existing?.lightCount ?? 0) + 1,
+      lights: [...(existing?.lights ?? []), light],
     })
   }
 

@@ -257,7 +257,7 @@ void loop() {
   MFRC522::MIFARE_Key key;
   memset(key.keyByte, 0xFF, sizeof(key.keyByte));
   byte before[18], after[18], size = 18, encoded[16] = {};
-  memcpy(encoded, mssv.c_str(), 10);
+  memcpy(encoded, mssv.c_str(), mssv.length());
   auto status = reader.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, 4, &key, &reader.uid);
   if (status == MFRC522::STATUS_OK) status = reader.MIFARE_Read(4, before, &size);
   bool acceptable = status == MFRC522::STATUS_OK;

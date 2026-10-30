@@ -289,5 +289,7 @@ class ChangeApproval(Base):
     reviewed_at = Column(DateTime(timezone=True))
 
 
+
+
 # Create tables in the database if they do not exist
 # Base.metadata.create_all(bind=engine)

@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import Float, Integer, String
+from sqlalchemy import Float, Integer, String, inspect, text
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.auth.dependencies import require_infrastructure_user
@@ -33,7 +33,7 @@ class WriteJob(Base):
     writer_id: Mapped[str] = mapped_column(String(80), index=True)
     admin_id: Mapped[int] = mapped_column(Integer)
     uid: Mapped[str] = mapped_column(String(32))
-    mssv: Mapped[str] = mapped_column(String(10))
+    mssv: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[float] = mapped_column(Float)
     claimed_at: Mapped[float | None] = mapped_column(Float)
     state: Mapped[str] = mapped_column(String(24), default="pending")
@@ -57,7 +57,7 @@ class CardIdentity(StrictModel):
 
 class CreateWrite(StrictModel):
     uid: str = Field(min_length=11, max_length=29)
-    mssv: str = Field(pattern=r"^245101[0-9]{4}$")
+    mssv: str = Field(pattern=r"^[A-Za-z0-9._-]{1,16}$")
     confirm_owned_card: Literal[True]
 
 
@@ -222,6 +222,10 @@ def initialize():
         raise ValueError("Invalid CARD_WRITER_ID")
     WriterStation.__table__.create(engine, checkfirst=True)
     WriteJob.__table__.create(engine, checkfirst=True)
+    columns = {column["name"]: column for column in inspect(engine).get_columns(WriteJob.__tablename__)}
+    if columns["mssv"]["type"].length != 16:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE card_write_job ALTER COLUMN mssv TYPE VARCHAR(16)"))
     with SessionLocal.begin() as db:
         if db.get(WriterStation, writer_id) is None:
             db.add(WriterStation(id=writer_id, seen_at=0, last_seen=0, card_type=""))

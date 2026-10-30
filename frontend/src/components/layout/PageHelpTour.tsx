@@ -35,7 +35,7 @@ const pageGuides: Record<string, GuideStep[]> = {
     guideStep('map-building-selector', 'Điều hướng bản đồ', 'Chọn tòa nhà để phóng đến khu vực. Có thể chọn phòng trực tiếp trên sơ đồ để xem chi tiết.'),
   ],
   [ROUTE_PATHS.cardReader]: [
-    guideStep('reader-campus-select', 'Chọn cơ sở điểm danh', 'Chọn đúng cơ sở để xem phiên và lịch sử điểm danh. Bộ đọc chỉ phục vụ một phiên tại một thời điểm.'),
+    guideStep('reader-class-select', 'Chọn lớp điểm danh', 'Chọn lớp có sinh viên để xem phiên và lịch sử điểm danh. Bộ đọc chỉ phục vụ một phiên tại một thời điểm.'),
     guideStep('reader-session-duration', 'Cấu hình thời lượng', 'Bật tự kết thúc và nhập số phút từ 1 đến 1440; tắt chế độ này nếu phiên sẽ được kết thúc thủ công.'),
     guideStep('reader-session-actions', 'Bắt đầu hoặc kết thúc phiên', 'Xác nhận thao tác trong hộp thoại. Chỉ MSSV được quét lần đầu trong phiên được ghi nhận; đây không phải xác minh danh tính.'),
     guideStep('reader-session-history', 'Xem lịch sử điểm danh', 'Chọn một phiên để xem tối đa 50 lượt mỗi trang; bảng thể hiện MSSV, giờ nhận tại server và trạm đọc.'),
@@ -43,7 +43,7 @@ const pageGuides: Record<string, GuideStep[]> = {
   ],
   [ROUTE_PATHS.cardWriter]: [
     guideStep('writer-card-status', 'Nhận diện thẻ', 'Chạm thẻ trắng hoặc thẻ mẫu lên trạm. Xác nhận writer đang liên lạc và kiểm tra UID, loại thẻ trước khi tiếp tục.'),
-    guideStep('writer-mssv-input', 'Nhập MSSV', 'Nhập đủ 10 chữ số, bắt đầu bằng 245101. Nút xác nhận chỉ được mở khi định dạng hợp lệ, writer trực tuyến và thẻ còn mới.'),
+    guideStep('writer-mssv-input', 'Nhập MSSV', 'Nhập 1–16 ký tự chữ, số, dấu chấm, gạch dưới hoặc gạch ngang. Nút xác nhận chỉ được mở khi định dạng hợp lệ, writer trực tuyến và thẻ còn mới.'),
     guideStep('writer-card-confirmation', 'Xác nhận quyền sử dụng thẻ', 'Kiểm tra UID đang hiển thị và xác nhận đây là thẻ trắng/thẻ mẫu thuộc quyền sử dụng của bạn. Không dùng thẻ trường có dữ liệu sẵn.'),
     guideStep('writer-authorize', 'Ủy quyền ghi một lần', 'Sau khi xác nhận, nhấc thẻ rồi chạm lại đúng thẻ trong thời hạn ủy quyền. Đọc kết quả lệnh ghi bên dưới để xác nhận thao tác hoàn tất.'),
   ],

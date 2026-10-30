@@ -122,12 +122,12 @@ function WriterStationPage() {
         styles={{ header: { background: 'linear-gradient(105deg, #eaf4fb, #f7fbfe)', borderBottomColor: '#dbe9f3' } }}
       >
         <Flex vertical gap={12}>
-          <Typography.Text>MSSV gồm 10 chữ số, bắt đầu bằng 245101. Không tự tăng số hay gán sinh viên.</Typography.Text>
-          <Input id="writer-mssv-input" aria-label="MSSV cần ghi" placeholder="245101xxxx" maxLength={10}
+          <Typography.Text>MSSV gồm 1–16 ký tự chữ, số, dấu chấm, gạch dưới hoặc gạch ngang để vừa khối dữ liệu thẻ. Không tự tăng số hay gán sinh viên.</Typography.Text>
+          <Input id="writer-mssv-input" aria-label="MSSV cần ghi" placeholder="Nhập MSSV" maxLength={16}
             value={mssv} onChange={(event) => setMssv(event.target.value)}
             disabled={busy || mutation.isPending} style={{ maxWidth: 320 }} />
-          {mssv && !/^245101[0-9]{4}$/.test(mssv) && <Typography.Text type="danger">
-            MSSV chưa hợp lệ: nhập đủ 10 chữ số, bắt đầu bằng 245101, ví dụ 2451010001.
+          {mssv && !/^[A-Za-z0-9._-]{1,16}$/.test(mssv) && <Typography.Text type="danger">
+            MSSV chỉ được gồm 1–16 ký tự chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.
           </Typography.Text>}
           <Checkbox id="writer-card-confirmation" checked={!!activeUid && consentUid === activeUid}
             disabled={!activeUid || busy || mutation.isPending}
@@ -138,7 +138,7 @@ function WriterStationPage() {
             description="Cấu hình Wi-Fi và địa chỉ backend cho writer, nạp lại firmware rồi chạm thẻ lên RC522. Khi UID xuất hiện ở bước 1, ô xác nhận mới được mở." />}
           {activeUid && !freshCard && <Typography.Text type="secondary">Nhấc thẻ rồi chạm lại để lấy UID mới (có hiệu lực 60 giây).</Typography.Text>}
           <Button id="writer-authorize" type="primary" onClick={authorize} loading={mutation.isPending}
-            disabled={!!query.error || !data?.online || !freshCard || busy || !activeUid || consentUid !== activeUid || !/^245101[0-9]{4}$/.test(mssv)}>
+            disabled={!!query.error || !data?.online || !freshCard || busy || !activeUid || consentUid !== activeUid || !/^[A-Za-z0-9._-]{1,16}$/.test(mssv)}>
             Xác nhận MSSV và ủy quyền ghi
           </Button>
         </Flex>
