@@ -11,8 +11,10 @@ import {
   TeamOutlined,
   EditOutlined,
   EditFilled,
-  BankFilled
+  BankFilled,
+  BarsOutlined
 } from '@ant-design/icons'
+import { Badge } from 'antd'
 import type { MenuProps } from 'antd'
 import type { AppRole } from './roleAccess'
 
@@ -27,6 +29,7 @@ export const ROUTE_PATHS = {
   courseRegistrations: '/admin/registrations',
   userManagement: '/admin/users',
   auditLogs: '/admin/logs',
+  changeApprovals: '/admin/change-approvals',
   profile: '/profile',
   documentation: '/guide',
   signIn: '/sign-in',
@@ -35,7 +38,7 @@ export const ROUTE_PATHS = {
 
 export type AppMenuItem = Required<MenuProps>['items'][number]
 
-export function getMenuItems(role: AppRole): AppMenuItem[] {
+export function getMenuItems(role: AppRole, pendingApprovalCount = 0): AppMenuItem[] {
   if (role === 'staff') {
     return [
       { key: ROUTE_PATHS.home, icon: <HomeOutlined />, label: 'Trang chủ' },
@@ -47,6 +50,11 @@ export function getMenuItems(role: AppRole): AppMenuItem[] {
           { key: ROUTE_PATHS.dataManagement, icon: <AppstoreOutlined />, label: 'Danh mục hệ thống' },
           { key: ROUTE_PATHS.courseRegistrations, icon: <EditOutlined />, label: 'Đăng ký môn học' },
           { key: ROUTE_PATHS.timetable, icon: <CalendarOutlined />, label: 'Thời khóa biểu' },
+          {
+            key: ROUTE_PATHS.changeApprovals,
+            icon: <Badge count={pendingApprovalCount} size="small"><EditOutlined /></Badge>,
+            label: 'Yêu cầu chỉnh sửa của tôi',
+          },
         ],
       },
     ]
@@ -83,8 +91,8 @@ export function getMenuItems(role: AppRole): AppMenuItem[] {
         icon: <DatabaseOutlined />,
         label: 'Quản lý dữ liệu',
         children: [
-          { key: ROUTE_PATHS.dataManagement,icon: <AppstoreOutlined />, label: 'Danh mục hệ thống' },
-          { key: ROUTE_PATHS.courseRegistrations, icon:<EditFilled />, label: 'Đăng ký môn học' },
+          { key: ROUTE_PATHS.dataManagement, icon: <AppstoreOutlined />, label: 'Danh mục hệ thống' },
+          { key: ROUTE_PATHS.courseRegistrations, icon: <EditFilled />, label: 'Đăng ký môn học' },
           { key: ROUTE_PATHS.timetable, icon: <CalendarOutlined />, label: 'Thời khóa biểu' },
           { key: ROUTE_PATHS.userManagement, icon: <TeamOutlined />, label: 'Tài khoản' },
         ],
@@ -106,7 +114,12 @@ export function getMenuItems(role: AppRole): AppMenuItem[] {
           },
         ],
       },
-      { key: ROUTE_PATHS.auditLogs, icon: <AuditOutlined />, label: 'Xem log' },
+      {
+        key: ROUTE_PATHS.changeApprovals,
+        icon: <Badge count={pendingApprovalCount} size="small"><AuditOutlined /></Badge>,
+        label: 'Duyệt chỉnh sửa',
+      },
+      { key: ROUTE_PATHS.auditLogs, icon: <BarsOutlined />, label: 'Xem log' },
     ]
   }
 

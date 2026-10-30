@@ -441,7 +441,9 @@ export default function AdminDataPage() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const canDelete = ['super_admin', 'staff'].includes(getAppRole(user?.role))
+  const role = getAppRole(user?.role)
+  const isStaff = role === 'staff'
+  const canDelete = ['super_admin', 'staff'].includes(role)
   const [selectedKey, setSelectedKey] = useState<EntityKey>('campus')
   const [records, setRecords] = useState<EntityRecord[]>([])
   const [faculties, setFaculties] = useState<OptionRecord[]>(emptyOptions)
@@ -646,11 +648,15 @@ export default function AdminDataPage() {
     if (!editingRecord) return
     setSubmitting(true)
     try {
-      await apiClient.patch(
+      const response = await apiClient.patch(
         `${entity.updateEndpoint}/${editingRecord.id}`,
         toPayload(selectedKey, values),
       )
-      messageApi.success(`Đã cập nhật ${entity.label.toLowerCase()}`)
+      messageApi.success(
+        response.status === 202
+          ? 'Đã gửi yêu cầu chỉnh sửa, đang chờ admin duyệt.'
+          : `Đã cập nhật ${entity.label.toLowerCase()}`,
+      )
       setEditingRecord(null)
       editForm.resetFields()
       await loadRecords()
@@ -942,7 +948,9 @@ export default function AdminDataPage() {
         </Col>
       </Row>
       <Modal
-        title={`Sửa ${entity.label.toLowerCase()}`}
+        title={isStaff
+          ? `Gửi yêu cầu sửa ${entity.label.toLowerCase()}`
+          : `Sửa ${entity.label.toLowerCase()}`}
         open={editingRecord !== null}
         onCancel={() => {
           setEditingRecord(null)
@@ -950,7 +958,7 @@ export default function AdminDataPage() {
         }}
         onOk={() => editForm.submit()}
         confirmLoading={submitting}
-        okText="Lưu thay đổi"
+        okText={isStaff ? 'Gửi yêu cầu duyệt' : 'Lưu thay đổi'}
         cancelText="Hủy"
         destroyOnHidden
       >

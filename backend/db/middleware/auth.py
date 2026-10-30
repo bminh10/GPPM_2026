@@ -1,12 +1,76 @@
 # Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
+import json
+from uuid import uuid4
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from core.config import PUBLIC_PATHS
-from core.permissions import is_request_allowed
+from core.permissions import get_role_key, is_request_allowed
 from core.session import read_user_id
-from db.database import SessionLocal, User
+from db.database import ChangeApproval, SessionLocal, User
+
+
+_REVIEWABLE_UPDATE_PREFIXES = {
+    "/campus",
+    "/faculties",
+    "/majors",
+    "/classes",
+    "/rooms",
+    "/subjects",
+    "/semesters",
+    "/time-slots",
+    "/course-registrations",
+    "/schedules",
+}
+
+
+def _is_reviewable_update(method: str, path: str) -> bool:
+    if method != "PATCH":
+        return False
+    segments = path.strip("/").split("/")
+    return (
+        len(segments) == 2
+        and f"/{segments[0]}" in _REVIEWABLE_UPDATE_PREFIXES
+        and segments[1].isdigit()
+    )
+
+
+async def _queue_change_approval(request: Request, user_id: int) -> JSONResponse:
+    try:
+        payload = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "Nội dung yêu cầu chỉnh sửa không hợp lệ."},
+        )
+    if not isinstance(payload, dict):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Dữ liệu chỉnh sửa phải là một object."},
+        )
+
+    approval_id = str(uuid4())
+    with SessionLocal() as db:
+        approval = ChangeApproval(
+            id=approval_id,
+            requester_id=user_id,
+            method=request.method,
+            path=request.url.path,
+            payload=payload,
+            status="pending",
+        )
+        db.add(approval)
+        db.commit()
+    return JSONResponse(
+        status_code=202,
+        content={
+            "approval_request_id": approval_id,
+            "status": "pending",
+            "message": "Yêu cầu chỉnh sửa đã được gửi và đang chờ admin duyệt.",
+        },
+    )
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -47,4 +111,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
         request.state.user_id = user_id
         request.state.role_name = role_name
+        if (
+            get_role_key(role_name) == "staff"
+            and _is_reviewable_update(request.method, request.url.path)
+        ):
+            return await _queue_change_approval(request, user_id)
         return await call_next(request)

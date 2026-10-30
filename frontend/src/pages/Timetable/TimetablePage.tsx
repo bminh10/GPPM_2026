@@ -11,6 +11,7 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
   Radio,
   Select,
   Space,
@@ -23,13 +24,17 @@ import {
 } from 'antd'
 import {
   EditOutlined,
+  DeleteOutlined,
   LeftOutlined,
+  PlusOutlined,
   RightOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import axios from 'axios'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient, getErrorMessage } from '../../services/apiClient'
+import { getAppRole } from '../../routes/roleAccess'
+import { useAuth } from '../../store/authStore'
 import SearchFilterSelect from '../../components/common/SearchFilterSelect'
 
 type Schedule = {
@@ -104,6 +109,14 @@ type ScheduleOptimizationJob = {
   result: AutomaticScheduleResult | null
   error: string | null
 }
+type RoomRecommendation = {
+  registration_id: number
+  required_capacity: number
+  suggested_room: RoomOption | null
+  available_rooms: RoomOption[]
+  has_class_conflict: boolean
+  message: string
+}
 
 const DAY_NAMES = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']
 const EMPTY_CLASSES: ClassOption[] = []
@@ -170,6 +183,8 @@ function formatTime(value: string) {
 }
 
 export default function TimetablePage() {
+  const { user } = useAuth()
+  const isStaff = getAppRole(user?.role) === 'staff'
   const queryClient = useQueryClient()
   const [semesterId, setSemesterId] = useState<number | undefined>(() => {
     const savedSemesterId = window.sessionStorage.getItem('timetable.semesterId')
@@ -184,7 +199,9 @@ export default function TimetablePage() {
   const [movingScheduleId, setMovingScheduleId] = useState<number | null>(null)
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null)
+  const [manualScheduleOpen, setManualScheduleOpen] = useState(false)
   const [savingSchedule, setSavingSchedule] = useState(false)
+  const [deletingSchedule, setDeletingSchedule] = useState(false)
   const [automaticScheduleOpen, setAutomaticScheduleOpen] = useState(false)
   const [automaticScheduleLoading, setAutomaticScheduleLoading] = useState(false)
   const [automaticScheduleMode, setAutomaticScheduleMode] =
@@ -201,6 +218,12 @@ export default function TimetablePage() {
   const handledOptimizationJobId = useRef<string | null>(null)
   const [editForm] = Form.useForm<ScheduleEditValues>()
   const editingRegistrationId = Form.useWatch('dang_ky_mon_hoc_id', editForm)
+  const editingSemesterId = Form.useWatch('hoc_ky_id', editForm)
+  const editingRoomId = Form.useWatch('phong_hoc_id', editForm)
+  const editingDayOfWeek = Form.useWatch('day_of_week', editForm)
+  const editingTimeSlotId = Form.useWatch('ca_hoc_id', editForm)
+  const editingStartDate = Form.useWatch('start_date', editForm)
+  const editingEndDate = Form.useWatch('end_date', editForm)
   const editingIsPractice = Form.useWatch('is_thuc_hanh', editForm)
   const [messageApi, contextHolder] = message.useMessage()
   const optimizationJobQuery = useQuery({
@@ -314,15 +337,86 @@ export default function TimetablePage() {
   const referencesError = referencesQuery.error
     ? getErrorMessage(referencesQuery.error)
     : null
+  const selectedSemesterId = semesters.some((semester) => semester.id === semesterId)
+    ? semesterId
+    : semesters[0]?.id
   const editingSubjectHasPractice = subjects.find(
     (subject) =>
       subject.id ===
       registrations.find((registration) => registration.id === editingRegistrationId)?.mon_id,
   )?.is_thuc_hanh
+  const editingRegistration = registrations.find(
+    (registration) => registration.id === editingRegistrationId,
+  )
+  const editingRoom = rooms.find((room) => room.id === editingRoomId)
+  const roomNeedsOptimization =
+    !!editingRegistration &&
+    !!editingRoom &&
+    editingRoom.capacity > editingRegistration.so_luong
+  const roomRecommendationQuery = useQuery({
+    queryKey: [
+      'timetable',
+      'room-recommendation',
+      editingSchedule?.id,
+      editingRegistrationId,
+      editingRoom?.campus_id,
+      editingSemesterId,
+      editingDayOfWeek,
+      editingTimeSlotId,
+      editingStartDate,
+      editingEndDate,
+      editingIsPractice,
+    ],
+    queryFn: async () => {
+      if (
+        (!editingSchedule && !manualScheduleOpen) ||
+        !editingRegistrationId ||
+        !editingRoom ||
+        !editingSemesterId ||
+        !editingDayOfWeek ||
+        !editingTimeSlotId ||
+        !editingStartDate ||
+        !editingEndDate
+      ) {
+        throw new Error('Thiếu thông tin để đề xuất phòng học.')
+      }
+      const { data } = await apiClient.post<RoomRecommendation>(
+        '/optimization/room-allocation',
+        {
+          dang_ky_mon_hoc_id: editingRegistrationId,
+          hoc_ky_id: editingSemesterId,
+          campus_id: editingRoom.campus_id,
+          ca_hoc_id: editingTimeSlotId,
+          day_of_week: editingDayOfWeek,
+          start_date: editingStartDate,
+          end_date: editingEndDate,
+          is_thuc_hanh: Boolean(editingIsPractice),
+          ...(editingSchedule ? { exclude_schedule_id: editingSchedule.id } : {}),
+        },
+      )
+      return data
+    },
+    enabled:
+      (editingSchedule !== null || manualScheduleOpen) &&
+      roomNeedsOptimization &&
+      editingRegistrationId !== undefined &&
+      editingSemesterId !== undefined &&
+      editingRoom !== undefined &&
+      editingDayOfWeek !== undefined &&
+      editingTimeSlotId !== undefined &&
+      !!editingStartDate &&
+      !!editingEndDate &&
+      editingStartDate <= editingEndDate,
+  })
+  const recommendedRoom = roomRecommendationQuery.data?.suggested_room
+  const hasSmallerRoomRecommendation =
+    !!recommendedRoom &&
+    !!editingRoom &&
+    recommendedRoom.capacity < editingRoom.capacity
+  const canApplyRoomRecommendation =
+    !roomRecommendationQuery.data?.has_class_conflict &&
+    hasSmallerRoomRecommendation
 
-  const selectedSemesterId = semesters.some((semester) => semester.id === semesterId)
-    ? semesterId
-    : semesters[0]?.id
   const selectedSemester = semesters.find((semester) => semester.id === selectedSemesterId)
   const weekAnchor = useMemo(
     () => weekAnchorOverride ?? selectedSemester?.start_date ?? toDateString(new Date()),
@@ -518,6 +612,7 @@ export default function TimetablePage() {
   }
 
   const openScheduleEditor = (schedule: Schedule) => {
+    setManualScheduleOpen(false)
     setEditingSchedule(schedule)
     editForm.setFieldsValue({
       dang_ky_mon_hoc_id: schedule.dang_ky_mon_hoc_id,
@@ -532,19 +627,69 @@ export default function TimetablePage() {
     })
   }
 
+  const openManualScheduleForm = () => {
+    if (!selectedSemester || semesterRegistrations.length === 0) {
+      messageApi.warning('Học kỳ hiện tại chưa có đăng ký môn học để xếp lịch.')
+      return
+    }
+    const registration = semesterRegistrations[0]
+    const suitableRooms = rooms
+      .filter((room) => !room.is_thuc_hanh && room.capacity >= registration.so_luong)
+      .sort((left, right) => left.capacity - right.capacity)
+    setEditingSchedule(null)
+    editForm.resetFields()
+    editForm.setFieldsValue({
+      dang_ky_mon_hoc_id: registration.id,
+      hoc_ky_id: selectedSemester.id,
+      day_of_week: 2,
+      ca_hoc_id: timeSlots[0]?.id,
+      phong_hoc_id: suitableRooms[0]?.id,
+      start_date: selectedSemester.start_date,
+      end_date: selectedSemester.end_date,
+      teacher_name: '',
+      is_thuc_hanh: false,
+    })
+    setManualScheduleOpen(true)
+  }
+
   const saveSchedule = async (values: ScheduleEditValues) => {
-    if (!editingSchedule) return
+    if (!editingSchedule && !manualScheduleOpen) return
     setSavingSchedule(true)
     try {
-      await apiClient.patch(`/schedules/${editingSchedule.id}`, values)
-      messageApi.success('Đã cập nhật lịch học.')
+      const response = editingSchedule
+        ? await apiClient.patch(`/schedules/${editingSchedule.id}`, values)
+        : await apiClient.post('/schedules', values)
+      messageApi.success(
+        editingSchedule && response.status === 202
+          ? 'Đã gửi yêu cầu chỉnh sửa lịch học, đang chờ admin duyệt.'
+          : editingSchedule
+            ? 'Đã cập nhật lịch học.'
+            : 'Đã sắp lịch thủ công thành công.',
+      )
       setEditingSchedule(null)
+      setManualScheduleOpen(false)
       void queryClient.invalidateQueries({ queryKey: ['schedules'] })
       void queryClient.invalidateQueries({ queryKey: ['analytics'] })
     } catch (error: unknown) {
       messageApi.error(getErrorMessage(error))
     } finally {
       setSavingSchedule(false)
+    }
+  }
+
+  const deleteSchedule = async () => {
+    if (!editingSchedule) return
+    setDeletingSchedule(true)
+    try {
+      await apiClient.delete(`/schedules/${editingSchedule.id}`)
+      messageApi.success('Đã xóa lịch học.')
+      setEditingSchedule(null)
+      void queryClient.invalidateQueries({ queryKey: ['schedules'] })
+      void queryClient.invalidateQueries({ queryKey: ['analytics'] })
+    } catch (error: unknown) {
+      messageApi.error(getErrorMessage(error))
+    } finally {
+      setDeletingSchedule(false)
     }
   }
 
@@ -585,7 +730,11 @@ export default function TimetablePage() {
         phong_hoc_id: roomId,
       })
       try {
-        await updateSchedule(schedule.phong_hoc_id)
+        const response = await updateSchedule(schedule.phong_hoc_id)
+        if (response.status === 202) {
+          messageApi.success('Đã gửi yêu cầu chuyển lịch, đang chờ admin duyệt.')
+          return
+        }
       } catch (error: unknown) {
         if (!axios.isAxiosError(error) || error.response?.status !== 409) throw error
         lastConflict = error
@@ -630,6 +779,17 @@ export default function TimetablePage() {
           </Typography.Text>
         </div>
         <Space wrap>
+          <Button
+            icon={<PlusOutlined />}
+            onClick={openManualScheduleForm}
+            disabled={
+              referencesLoading ||
+              selectedSemesterId === undefined ||
+              semesterRegistrations.length === 0
+            }
+          >
+            Sắp lịch thủ công
+          </Button>
           <Button
             id="timetable-auto-schedule"
             type="primary"
@@ -1109,15 +1269,46 @@ export default function TimetablePage() {
         </Space>
       </Modal>
       <Modal
-        title="Chỉnh sửa lịch học"
-        open={editingSchedule !== null}
-        onCancel={() => setEditingSchedule(null)}
+        title={
+          manualScheduleOpen
+            ? 'Sắp lịch thủ công'
+            : isStaff
+              ? 'Gửi yêu cầu sửa lịch học'
+              : 'Chỉnh sửa lịch học'
+        }
+        open={editingSchedule !== null || manualScheduleOpen}
+        onCancel={() => {
+          setEditingSchedule(null)
+          setManualScheduleOpen(false)
+        }}
         onOk={() => editForm.submit()}
-        okText="Lưu thay đổi"
+        okText={
+          manualScheduleOpen
+            ? 'Tạo lịch'
+            : isStaff
+              ? 'Gửi yêu cầu duyệt'
+              : 'Lưu thay đổi'
+        }
         cancelText="Hủy"
         confirmLoading={savingSchedule}
         destroyOnHidden
       >
+        {editingSchedule && (
+          <Flex justify="flex-end" style={{ marginBottom: 16 }}>
+            <Popconfirm
+              title="Xóa lịch học này?"
+              description="Thao tác này không thể hoàn tác."
+              okText="Xóa"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true, loading: deletingSchedule }}
+              onConfirm={() => void deleteSchedule()}
+            >
+              <Button danger icon={<DeleteOutlined />} loading={deletingSchedule}>
+                Xóa lịch
+              </Button>
+            </Popconfirm>
+          </Flex>
+        )}
         <Form form={editForm} layout="vertical" onFinish={saveSchedule}>
           <Form.Item
             name="dang_ky_mon_hoc_id"
@@ -1125,8 +1316,8 @@ export default function TimetablePage() {
             rules={[{ required: true, message: 'Vui lòng chọn đăng ký môn học' }]}
           >
             <SearchFilterSelect
-              disabled
-              options={registrations.map((registration) => {
+              disabled={!manualScheduleOpen}
+              options={(manualScheduleOpen ? semesterRegistrations : registrations).map((registration) => {
                 const schoolClass = classes.find((item) => item.id === registration.lop_id)
                 const subject = subjects.find((item) => item.id === registration.mon_id)
                 return {
@@ -1134,6 +1325,9 @@ export default function TimetablePage() {
                   label: `${schoolClass?.name ?? `Lớp ${registration.lop_id}`} · ${subject?.name ?? `Môn ${registration.mon_id}`}`,
                 }
               })}
+              onChange={() => {
+                if (manualScheduleOpen) editForm.setFieldValue('phong_hoc_id', undefined)
+              }}
             />
           </Form.Item>
           <Flex gap={12} wrap="wrap">
@@ -1199,6 +1393,46 @@ export default function TimetablePage() {
               />
             </Form.Item>
           </Flex>
+          {roomNeedsOptimization && (
+            <Alert
+              showIcon
+              type={roomRecommendationQuery.isError ? 'error' : 'info'}
+              message={
+                roomRecommendationQuery.isError
+                  ? 'Không thể tìm đề xuất phòng phù hợp.'
+                  : roomRecommendationQuery.isPending
+                    ? 'Đang tìm phòng phù hợp...'
+                    : roomRecommendationQuery.data?.has_class_conflict
+                      ? 'Lớp đã có lịch khác bị trùng trong khung giờ này.'
+                      : hasSmallerRoomRecommendation
+                        ? `Đề xuất đổi sang ${recommendedRoom.name} (${recommendedRoom.capacity} chỗ)`
+                        : 'Phòng đang chọn đã phù hợp nhất trong các phòng còn trống.'
+              }
+              description={
+                roomRecommendationQuery.isError
+                  ? getErrorMessage(roomRecommendationQuery.error)
+                  : hasSmallerRoomRecommendation
+                    ? `Lớp có ${editingRegistration?.so_luong} sinh viên. Thuật toán ưu tiên phòng đủ chỗ, ít dư sức chứa và không trùng lịch.`
+                    : roomRecommendationQuery.data?.has_class_conflict
+                      ? 'Hãy đổi thứ hoặc ca học để tránh trùng lịch của lớp.'
+                      : roomRecommendationQuery.isSuccess &&
+                          !roomRecommendationQuery.data.suggested_room
+                        ? 'Không có phòng phù hợp còn trống tại cơ sở này cho khung giờ đã chọn.'
+                        : undefined
+              }
+              action={
+                canApplyRoomRecommendation ? (
+                  <Button
+                    size="small"
+                    onClick={() => editForm.setFieldValue('phong_hoc_id', recommendedRoom.id)}
+                  >
+                    Dùng phòng đề xuất
+                  </Button>
+                ) : undefined
+              }
+              style={{ marginBottom: 16 }}
+            />
+          )}
           <Flex gap={12} wrap="wrap">
             <Form.Item
               name="start_date"

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { useState } from 'react'
 import { Badge, Button, Empty, Flex, Popover, Tag, Typography } from 'antd'
-import { BellOutlined, BulbFilled } from '@ant-design/icons'
+import { AlertFilled, BellOutlined, BulbFilled } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { ROUTE_PATHS } from '../../routes/menuConfig'
 import { localDate, useLightingWasteAlerts } from '../../hooks/useLightingWasteAlerts'
@@ -24,7 +24,7 @@ export default function LightingWasteAlertButton() {
 
 
   const content = (
-    <Flex vertical gap={12} style={{ width: 320, maxWidth: '80vw' }}>
+    <Flex vertical gap={12} style={{maxWidth: '80vw' }}>
       <Flex align="center" justify="space-between">
         <Typography.Text strong>Cảnh báo</Typography.Text>
         {alerts.length > 0 && <Tag color="warning">{alerts.length} phòng</Tag>}
@@ -44,7 +44,7 @@ export default function LightingWasteAlertButton() {
               block
               aria-label={`Mở phòng ${alert.roomName} trên bản đồ`}
               onClick={() => openRoomOnMap(alert.campusId, alert.roomName)}
-              style={{ height: 'auto', padding: '8px 4px', textAlign: 'left' }}
+              style={{ height: 'auto', textAlign: 'left' }}
             >
               <Flex align="center" gap={8}>
                 <BulbFilled style={{ color: '#d48806' }} />
@@ -74,7 +74,7 @@ export default function LightingWasteAlertButton() {
         <Button
           type="text"
           aria-label={alerts.length ? `Cảnh báo, ${alerts.length} phòng bật đèn ngoài giờ học` : 'Cảnh báo'}
-          icon={<BellOutlined style={{ color: alerts.length ? '#d48806' : undefined }} />}
+          icon={<AlertFilled style={{ color: alerts.length ? '#d48806' : undefined }} />}
         >
           Cảnh báo
         </Button>

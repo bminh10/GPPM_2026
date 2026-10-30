@@ -82,6 +82,7 @@ class RoomAllocationRequest(BaseModel):
     start_date: date
     end_date: date
     is_thuc_hanh: bool = False
+    exclude_schedule_id: int | None = None
 
 
 class AutomaticScheduleRequest(BaseModel):
@@ -989,24 +990,35 @@ def suggest_room_allocation(
             )
     existing_schedules = (
         db.query(
+            ThoiKhoaBieu.id,
             ThoiKhoaBieu.phong_hoc_id,
+            DangKyMonHoc.lop_id,
             CaHoc.start_time,
             CaHoc.end_time,
         )
         .join(CaHoc, ThoiKhoaBieu.ca_hoc_id == CaHoc.id)
+        .join(
+            DangKyMonHoc,
+            ThoiKhoaBieu.dang_ky_mon_hoc_id == DangKyMonHoc.id,
+        )
         .filter(
+            ThoiKhoaBieu.hoc_ky_id == data.hoc_ky_id,
             ThoiKhoaBieu.day_of_week == data.day_of_week,
             ThoiKhoaBieu.start_date <= data.end_date,
             ThoiKhoaBieu.end_date >= data.start_date,
         )
-        .all()
     )
-    conflicting_room_ids = {
-        room_id
-        for room_id, existing_start, existing_end in existing_schedules
-        if time_slot.start_time < existing_end
-        and existing_start < time_slot.end_time
-    }
+    if data.exclude_schedule_id is not None:
+        existing_schedules = existing_schedules.filter(
+            ThoiKhoaBieu.id != data.exclude_schedule_id
+        )
+    conflicting_room_ids = set()
+    has_class_conflict = False
+    for _, room_id, class_id, existing_start, existing_end in existing_schedules.all():
+        if time_slot.start_time < existing_end and existing_start < time_slot.end_time:
+            conflicting_room_ids.add(room_id)
+            if class_id == registration.lop_id:
+                has_class_conflict = True
     class_size = registration.so_luong
     candidate_query = db.query(PhongHoc)
     if data.campus_id is not None:
@@ -1065,6 +1077,7 @@ def suggest_room_allocation(
         "suggested_room": available_rooms[0] if available_rooms else None,
         "available_rooms": available_rooms,
         "excluded_rooms": excluded_rooms,
+        "has_class_conflict": has_class_conflict,
         "message": (
             "Đã tìm thấy phòng phù hợp."
             if available_rooms

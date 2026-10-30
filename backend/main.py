@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.analytics.analytics import router as routerAnalytics
+from app.approvals.approvals import router as routerApprovals
 from app.auth.auth import router as routerAuth
 from app.campus.campus import router as routerCampus
 from app.classes.classes import router as routerClasses
@@ -19,17 +20,21 @@ from app.subjects.subjects import router as routerSubjects
 from app.time_slots.time_slots import router as routerTimeSlots
 from app.users.users import router as routerUsers
 from core.config import CORS_ORIGINS
-from middleware.audit import AuditLogMiddleware
-from middleware.auth import AuthMiddleware
+from db.middleware.audit import AuditLogMiddleware
+from db.middleware.auth import AuthMiddleware
 from app.lighting.router import router as routerLighting, device_router
 from app.cards.router import router as routerCards
 from app.cards.writer import router as routerCardWriter
 from app.cards.attendance import router as routerCardAttendance
 
-app = FastAPI(version="1.0")
+app = FastAPI(version="1.1")
+# 1.0 base version
+# 1.1 database shcema changes, new endpoints and features.
+
 
 for router in (
     routerAuth,
+    routerApprovals,
     routerUsers,
     routerCampus,
     routerFaculties,

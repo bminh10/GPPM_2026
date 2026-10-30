@@ -16,6 +16,7 @@ import AdminUsersPage from '../pages/AdminUsers/AdminUsersPage'
 import CardReaderPage from '../pages/CardReader/CardReaderPage'
 import CardWriterPage from '../pages/CardWriter/CardWriterPage'
 import DocumentationPage from '../pages/Documentation/DocumentationPage'
+import ChangeApprovalsPage from '../pages/Approvals/ChangeApprovalsPage'
 
 const adminRoles: AppRole[] = ['super_admin', 'admin']
 const dashboardRoles: AppRole[] = ['super_admin', 'admin', 'technician']
@@ -70,6 +71,10 @@ export const route = createBrowserRouter([
           {
             path: ROUTE_PATHS.auditLogs,
             element: <RoleRoute roles={adminRoles}><AuditLogsPage /></RoleRoute>,
+          },
+          {
+            path: ROUTE_PATHS.changeApprovals,
+            element: <RoleRoute roles={['super_admin', 'admin', 'staff']}><ChangeApprovalsPage /></RoleRoute>,
           },
         ],
       },

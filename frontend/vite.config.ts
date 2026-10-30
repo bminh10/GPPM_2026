@@ -9,7 +9,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: process.env.API_PROXY_TARGET ?? 'https://be-3u2p.onrender.com',
+        // target: process.env.API_PROXY_TARGET ?? 'https://be-3u2p.onrender.com',
+        target: process.env.API_PROXY_TARGET ?? 'http://localhost:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

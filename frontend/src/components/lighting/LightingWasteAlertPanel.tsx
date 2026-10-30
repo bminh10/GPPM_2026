@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Minh Truong. Licensed under the MIT License, see LICENSE.
 import { Alert, Button, Card, Empty, Flex, Spin, Tag, Typography } from 'antd'
-import { BulbFilled, WarningOutlined } from '@ant-design/icons'
+import { BulbFilled, AlertFilled } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { ROUTE_PATHS } from '../../routes/menuConfig'
 import { localDate, useLightingWasteAlerts } from '../../hooks/useLightingWasteAlerts'
@@ -32,7 +32,7 @@ export default function LightingWasteAlertPanel() {
       title={
         <Flex align="center" gap={10}>
           <span className="dashboard-panel-icon dashboard-panel-icon-warning">
-            <WarningOutlined />
+            <AlertFilled />
           </span>
           <Flex vertical>
             <Typography.Text strong>Cảnh báo lãng phí điện</Typography.Text>

@@ -139,7 +139,9 @@ function downloadTemplate() {
 
 export default function CourseRegistrationTab() {
   const { user } = useAuth()
-  const canDelete = ['super_admin', 'staff'].includes(getAppRole(user?.role))
+  const role = getAppRole(user?.role)
+  const isStaff = role === 'staff'
+  const canDelete = ['super_admin', 'staff'].includes(role)
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [classes, setClasses] = useState<ClassOption[]>([])
   const [subjects, setSubjects] = useState<SubjectOption[]>([])
@@ -273,8 +275,12 @@ export default function CourseRegistrationTab() {
     if (!editing) return
     setSaving(true)
     try {
-      await apiClient.patch(`/course-registrations/${editing.id}`, values)
-      messageApi.success('Đã cập nhật đăng ký môn học')
+      const response = await apiClient.patch(`/course-registrations/${editing.id}`, values)
+      messageApi.success(
+        response.status === 202
+          ? 'Đã gửi yêu cầu chỉnh sửa, đang chờ admin duyệt.'
+          : 'Đã cập nhật đăng ký môn học',
+      )
       setEditing(null)
       await loadRegistrations()
     } catch (error: unknown) {
@@ -558,7 +564,7 @@ export default function CourseRegistrationTab() {
       </Card>
 
       <Modal
-        title="Sửa đăng ký môn học"
+        title={isStaff ? 'Gửi yêu cầu sửa đăng ký môn học' : 'Sửa đăng ký môn học'}
         open={editing !== null}
         onCancel={() => {
           setEditing(null)
@@ -566,7 +572,7 @@ export default function CourseRegistrationTab() {
         }}
         onOk={() => form.submit()}
         confirmLoading={saving}
-        okText="Lưu thay đổi"
+        okText={isStaff ? 'Gửi yêu cầu duyệt' : 'Lưu thay đổi'}
         cancelText="Hủy"
         destroyOnHidden
       >

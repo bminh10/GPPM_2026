@@ -51,6 +51,10 @@ def is_request_allowed(role_name: str | None, method: str, path: str) -> bool:
     method = method.upper()
     if path in {"/auth/me", "/auth/logout", "/me"}:
         return True
+    if _matches_prefix(path, "/approvals/changes"):
+        if method == "GET":
+            return role in {"admin", "staff"}
+        return role in {"admin", "super_admin"}
     if role == "admin" and method == "DELETE":
         return False
 

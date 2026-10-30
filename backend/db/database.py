@@ -269,5 +269,25 @@ class ScheduleOptimizationJob(Base):
     )
 
 
+class ChangeApproval(Base):
+    __tablename__ = "change_approval"
+
+    id = Column(String, primary_key=True)
+    requester_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    reviewer_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    method = Column(String, nullable=False)
+    path = Column(String, nullable=False)
+    payload = Column(JSONB, nullable=False)
+    status = Column(String, nullable=False, default="pending", index=True)
+    review_note = Column(Text)
+    error = Column(Text)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    reviewed_at = Column(DateTime(timezone=True))
+
+
 # Create tables in the database if they do not exist
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine)
