@@ -5,7 +5,7 @@ export default function AppFooter() {
   return (
     <Layout.Footer style={{ textAlign: 'center', background: 'transparent' }}>
       <Typography.Text type="secondary">
-        SmartOU © {new Date().getFullYear()} — Smart Campus, Đại học Mở TP.HCM · v1.0.0
+        SmartOU © {new Date().getFullYear()} — Smart Campus, Đại học Mở TP.HCM · v1.1.0
       </Typography.Text>
     </Layout.Footer>
   )

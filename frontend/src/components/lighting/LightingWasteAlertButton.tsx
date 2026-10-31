@@ -210,9 +210,9 @@ export default function LightingWasteAlertButton() {
               <Typography.Text type="secondary">
                 Khi phòng không có ca học đang diễn ra và đèn đang bật, hệ thống cảnh báo rồi đếm ngược {AUTO_OFF_COUNTDOWN_SECONDS} giây trước khi gửi lệnh tắt.
               </Typography.Text>
-              <Typography.Text type="secondary">
+              {/* <Typography.Text type="secondary">
                 Tự động chỉ hoạt động khi ứng dụng đang mở và kết nối được API.
-              </Typography.Text>
+              </Typography.Text> */}
               {!canControlLights && (
                 <Typography.Text type="secondary">Bạn cần quyền quản trị hoặc kỹ thuật để thay đổi cài đặt.</Typography.Text>
               )}
@@ -234,9 +234,7 @@ export default function LightingWasteAlertButton() {
       </Flex>
 
       {autoEnabled && (
-        <Typography.Text type="secondary">
-          Tự động tắt đang bật · đếm ngược {AUTO_OFF_COUNTDOWN_SECONDS} giây
-        </Typography.Text>
+        <Tag color={"green"} style={{width: 50, marginBottom: 5}}>Auto</Tag>
       )}
       {error ? (
         <Typography.Text type="danger">Không thể tải cảnh báo: {error}</Typography.Text>
