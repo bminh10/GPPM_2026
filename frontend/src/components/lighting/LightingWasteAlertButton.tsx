@@ -11,7 +11,7 @@ import { getErrorMessage } from '../../services/apiClient'
 import { getAppRole } from '../../routes/roleAccess'
 import { useAuth } from '../../store/authStore'
 
-const AUTO_OFF_COUNTDOWN_SECONDS = 15
+const AUTO_OFF_COUNTDOWN_SECONDS = 10
 const AUTO_OFF_STORAGE_KEY = 'lighting-auto-shutdown-enabled'
 const countdownKey = (alert: LightingWasteAlert) => JSON.stringify([alert.campusId, alert.roomName])
 type AutomationView = {
