@@ -138,14 +138,17 @@ export default function CardReaderPage() {
           ) : (
           <Flex vertical gap={12}>
             {scan.attendance && <Alert showIcon
-              type={error ? 'warning' : scan.attendance.status === 'recorded' ? 'success' : 'warning'}
+              type={error ? 'warning' : scan.attendance.status === 'recorded' ? 'success'
+                : scan.attendance.status === 'invalid' ? 'error' : 'warning'}
               title={`${error ? 'Kết quả lần quét cũ · ' : ''}${scan.attendance.message}`}
               description={scan.attendance.class_name
                 ? `Lớp: ${scan.attendance.class_name}. Kết quả của lần quét gần nhất, không phải trạng thái phiên hiện tại.`
                 : 'Chưa có phiên điểm danh. Đây là kết quả của lần quét gần nhất.'} />}
             {!scan.mssv && (
               <Typography.Text type="warning">
-                {scan.read_status === 'ok'
+                {scan.read_status === 'ok' && scan.block === 4 && scan.data_hex === '00'.repeat(16)
+                  ? 'Thẻ không có dữ liệu'
+                  : scan.read_status === 'ok'
                   ? 'Không tìm thấy MSSV đúng định dạng trong khối 4.'
                   : 'Chưa đọc được MSSV: không đọc được dữ liệu khối thẻ.'}
               </Typography.Text>

@@ -26,23 +26,24 @@ export default function AttendancePanel() {
 function AttendanceControls() {
   const { modal, message } = App.useApp()
   const client = useQueryClient()
-  const [classId, setClassId] = useState<number>()
+  const [selectedClassId, setClassId] = useState<number>()
   const [timed, setTimed] = useState(true)
   const [minutes, setMinutes] = useState<number | null>(15)
   const [selected, setSelected] = useState<string>()
   const [page, setPage] = useState(1)
   const [mssvInput, setMssvInput] = useState('')
   const [day, setDay] = useState<string>()
+  const classes = useQuery({
+    queryKey: ['attendance-classes'],
+    queryFn: async () => (await apiClient.get<SchoolClass[]>('/card-attendance/classes')).data,
+  })
+  const classId = selectedClassId ?? classes.data?.find((item) => item.name === 'NET2601')?.id
   const status = useQuery({
     queryKey: ['card-attendance', classId, day],
     queryFn: async () => (await apiClient.get<Status>('/card-attendance', { params: { class_id: classId, date: day } })).data,
     enabled: !!classId,
     refetchInterval: 1500,
     retry: false,
-  })
-  const classes = useQuery({
-    queryKey: ['attendance-classes'],
-    queryFn: async () => (await apiClient.get<SchoolClass[]>('/card-attendance/classes')).data,
   })
 
   const current = status.data?.current
@@ -121,8 +122,6 @@ function AttendanceControls() {
       styles={{ header: { background: 'linear-gradient(105deg, #eaf4fb, #f7fbfe)', borderBottomColor: '#dbe9f3' } }}
     >
       <Flex vertical gap={12}>
-        <Alert type="info" showIcon title="Chỉ ghi nhận MSSV đã quét, chưa xác minh danh tính"
-          description="Chọn lớp có sinh viên để mở phiên. Mỗi mã số chỉ ghi nhận lần đầu trong phiên; lượt sau báo “Đã điểm danh”. Ngoài phiên báo “Đã quá giờ điểm danh”." />
         {status.error && <Alert type="error" title="Không tải được phiên điểm danh" description={getErrorMessage(status.error)} showIcon />}
         {classes.error && <Alert type="error" title="Không tải được danh sách lớp" description={getErrorMessage(classes.error)} showIcon />}
         <Typography.Text strong>
@@ -195,14 +194,16 @@ function AttendanceControls() {
             ? `Tìm thấy ${filteredLogs.length} / ${logs.data?.items?.length ?? 0} MSSV khớp "${mssvInput}" trong phiên đang xem`
             : `Số MSSV đã ghi nhận trong phiên đang xem: ${logs.data?.items?.length ?? 0}`}
         </Typography.Text>
-        <Table<Log> rowKey="id" dataSource={filteredLogs} loading={logs.isPending && !logs.data}
+        <Table<Log> rowKey="id" dataSource={filteredLogs} loading={logs.isLoading}
           scroll={{ x: 600 }} columns={[
             { title: 'Mã số sinh viên', dataIndex: 'mssv' },
             { title: 'Giờ nhận tại server', dataIndex: 'received_at', render: (value: number) => date(value) },
             { title: 'Trạm đọc', dataIndex: 'reader_id' },
           ]}
           pagination={{ current: page, pageSize: 50, total: filteredLogs.length, showSizeChanger: false, onChange: setPage }}
-          locale={{ emptyText: mssvInput ? `Không có MSSV nào khớp "${mssvInput}" trong phiên` : 'Chưa có MSSV được ghi nhận trong phiên' }} />
+          locale={{ emptyText: !classId ? 'Vui lòng chọn lớp'
+            : !sessionId ? 'Chưa có phiên điểm danh cho lớp đã chọn'
+            : mssvInput ? `Không có MSSV nào khớp "${mssvInput}" trong phiên` : 'Chưa có MSSV được ghi nhận trong phiên' }} />
         </Flex>
         </div>
       </Flex>

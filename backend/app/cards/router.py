@@ -84,7 +84,8 @@ def receive_scan(
     scan.received_at = time.time()
     scan.payload = report.model_dump_json()
     row = attendance_station(db, reader_id)
-    attendance = record_scan(db, row, read_mssv(report))
+    empty_card = report.read_status == "ok" and report.block == 4 and report.data_hex == "00" * 16
+    attendance = record_scan(db, row, read_mssv(report), empty_card=empty_card)
     row.last_result = json.dumps(attendance, ensure_ascii=False)
     db.commit()
     return {"received": True, "read_status": report.read_status, "mssv": read_mssv(report), "attendance": attendance}

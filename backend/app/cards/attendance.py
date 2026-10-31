@@ -83,7 +83,7 @@ def session_view(session: AttendanceSession):
     }
 
 
-def record_scan(db: Session, row: AttendanceStation, mssv: str | None):
+def record_scan(db: Session, row: AttendanceStation, mssv: str | None, *, empty_card: bool = False):
     now = time.time()
     session = current_session(db, row, now)
     result = {
@@ -95,7 +95,27 @@ def record_scan(db: Session, row: AttendanceStation, mssv: str | None):
     if session is None or session.closed_at is not None:
         return result
     if mssv is None:
-        return {**result, "status": "invalid", "message": "Không đọc được MSSV đúng định dạng"}
+        return {
+            **result, "status": "invalid",
+            "message": "Thẻ không có dữ liệu" if empty_card else "Không đọc được MSSV đúng định dạng",
+        }
+    if session.class_id is None:
+        return {**result, "status": "invalid", "message": "Điểm danh thất bại: phiên chưa gắn với lớp học"}
+    student = db.execute(
+        text("""
+            SELECT 1
+            FROM sinhvien AS sv
+            JOIN dang_ky_mon_hoc AS dkmh ON dkmh.id = sv.lop_id
+            WHERE dkmh.lop_id = :class_id AND sv.mssv = :mssv
+            LIMIT 1
+        """),
+        {"class_id": session.class_id, "mssv": mssv},
+    ).first()
+    if student is None:
+        return {
+            **result, "status": "invalid",
+            "message": "Điểm danh thất bại: MSSV không thuộc danh sách sinh viên của lớp",
+        }
     existing = db.query(AttendanceLog).filter_by(session_id=session.id, mssv=mssv).first()
     if existing:
         return {**result, "status": "duplicate", "message": "Đã điểm danh"}

@@ -328,6 +328,28 @@ Thay toàn bộ nội dung chứng chỉ bằng root CA PEM hợp lệ như mụ
 
 Sau đó đăng nhập Admin/Super Admin, mở menu **Đọc thẻ** trên website.
 
+**Khi nâng cấp từ điểm danh theo cơ sở sang điểm danh theo lớp:** trên máy có cấu hình kết nối đến đúng database của backend triển khai, chạy từ thư mục `backend`:
+
+```powershell
+python -m app.cards.attendance
+```
+
+Lệnh cập nhật bảng phiên với `class_id`, `class_name`, cho phép thông tin cơ sở để trống và mở rộng MSSV lên 16 ký tự; giữ nguyên các phiên và log cũ. Có thể chạy lại trên database đã cập nhật. Phải hoàn thành bước này trước khi dùng API theo lớp; nếu thiếu, `GET /card-attendance?class_id=...` có thể trả HTTP 500 với lỗi PostgreSQL `column card_attendance_session.class_id does not exist`. Không cần chạy lại setup, đổi khóa thiết bị hoặc nạp lại firmware chỉ để cập nhật bảng điểm danh.
+
+### 5.3.1. Điểm danh theo danh sách sinh viên của lớp
+
+Chọn lớp và mở phiên trên trang **Đọc thẻ** trước khi quét. Backend đọc MSSV từ khối 4 của thẻ: 1–16 ký tự ASCII gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang, phần còn lại của khối là byte `0x00`. Không yêu cầu tiền tố `245101`; trạm ghi thẻ cũng chấp nhận cùng định dạng này.
+
+MSSV phải khớp chính xác với `sinhvien.mssv` và thuộc lớp của phiên đang mở. Trong cấu trúc CSDL hiện tại, `sinhvien.lop_id` tham chiếu bản ghi `dang_ky_mon_hoc.id`, còn `dang_ky_mon_hoc.lop_id` tham chiếu `lop.id`; không so sánh trực tiếp `sinhvien.lop_id` với ID lớp.
+
+- MSSV thuộc danh sách lớp: lưu vào `card_attendance_log`, báo **Điểm danh thành công**.
+- Không có trong danh sách hoặc thuộc lớp khác: báo **Điểm danh thất bại**, không thêm log điểm danh; báo cáo quét gần nhất vẫn được lưu để hiển thị lỗi.
+- Khi phiên đang mở, khối 4 đọc thành công và toàn bộ 16 byte là `0x00`: báo **Thẻ không có dữ liệu**, không thêm log. Lỗi đọc bộ nhớ hoặc dữ liệu không đúng định dạng không được coi là thẻ trống.
+- MSSV hợp lệ đã ghi nhận trong phiên: báo **Đã điểm danh**, không tạo log trùng.
+- Thẻ không đọc được MSSV, phiên cũ chưa gắn lớp, chưa mở phiên hoặc phiên đã kết thúc: không ghi điểm danh.
+
+API `POST /iot/card-reader/scans` trả trạng thái `recorded`, `duplicate`, `invalid` hoặc `outside`. Firmware reader hiện tại phát một tiếng báo kết quả khi `recorded`, hai tiếng khi không thêm điểm danh và ba tiếng khi không xác nhận được phản hồi API. Đối chiếu danh sách chỉ xác nhận MSSV thuộc lớp mô phỏng, không xác minh danh tính người cầm thẻ. Log lịch sử được giữ nguyên, không tự đánh giá lại các lượt đã ghi trước khi bổ sung kiểm tra danh sách.
+
 ### 5.4. Đổi Wi-Fi cho board
 
 Wi-Fi của board được lưu trong firmware, độc lập với Wi-Fi của máy tính. Nếu mang board đến nơi khác hoặc mạng cũ đổi tên/mật khẩu, thực hiện:

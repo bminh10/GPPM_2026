@@ -202,7 +202,7 @@ def write_result(data: WriteResult, writer_id: str = Depends(writer_auth), db: S
     job = current_job(db, row)
     if not job or job.id != data.job_id or job.uid != data.uid:
         raise HTTPException(409, "Write job/UID mismatch")
-    expected = (job.mssv.encode("ascii") + bytes(6)).hex().upper()
+    expected = job.mssv.encode("ascii").ljust(16, b"\x00").hex().upper()
     if data.success and data.data_hex != expected:
         raise HTTPException(422, "Read-back bytes do not match authorized MSSV")
     target = "succeeded" if data.success else "failed"
