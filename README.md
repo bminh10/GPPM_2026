@@ -1,6 +1,7 @@
 # Smart OU
 
 **Website:** [Smart OU trên Cloudflare](https://gppm-2026.truongbinhminh27122006.workers.dev/).
+<img width="1850" height="862" alt="image" src="https://github.com/user-attachments/assets/5eb4b55c-c666-4e2a-bc26-cc84c7c45be2" />
 
 📘 **Hướng dẫn cài đặt:** xem [HUONG_DAN_CAI_DAT.md](./HUONG_DAN_CAI_DAT.md).
 
