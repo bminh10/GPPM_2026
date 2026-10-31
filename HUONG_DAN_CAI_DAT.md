@@ -277,19 +277,37 @@ Trên website, chọn **CS3** → **B101**. Khi board báo trực tuyến và đ
 
 ### 5.1. Phần cứng
 
-Trạm đọc thẻ dùng **ESP32 NodeMCU-32S** và module **RC522**. Nối dây theo bảng:
+Trạm đọc thẻ/điểm danh dùng **YOLO UNO ESP32-S3** và module **RC522**. Nối dây theo bảng:
 
-| RC522 | ESP32 |
+| RC522 | YOLO UNO |
 | --- | --- |
-| SDA (SS) | GPIO 21 |
-| SCK | GPIO 18 |
-| MOSI | GPIO 23 |
-| MISO | GPIO 19 |
-| RST | GPIO 22 |
+| SDA (SS) | D10 (GPIO 21) |
+| SCK | D13 (GPIO 48) |
+| MOSI | D11 (GPIO 38) |
+| MISO | D12 (GPIO 47) |
+| RST | D9 (GPIO 18) |
 | 3.3V | 3V3 |
 | GND | GND |
 
 Rút USB trước khi nối dây. RC522 chỉ dùng nguồn **3.3V**, không cấp 5V.
+
+Module buzzer ba chân dùng nguồn 5V: `S` nối **D8 (GPIO 17)**, `+` nối **5V**, `-` nối **GND**; module phải hỗ trợ tín hiệu điều khiển 3.3V. Không nối nguồn 5V vào chân tín hiệu. Trên YOLO UNO dùng nhãn D8–D13 in trên board, không nhầm với số GPIO.
+
+**LCD 1602 I²C OhStem (3.3V, địa chỉ 0x27):** cắm cáp module vào cổng đỏ **I2C4** của YOLO UNO khi đã rút nguồn. Các cổng I2C1–I2C4 dùng chung bus, không phải bốn bus độc lập. Theo [sơ đồ chân chính thức OhStem](https://docs.ohstem.vn/en/latest/_images/so_do_chan.jpg), SDA là **GPIO 11**, SCL là **GPIO 12**, cùng nguồn 3.3V và GND; không trùng chân SPI của RC522 trong cấu hình reader. Không cấp 5V cho LCD 3.3V này.
+
+Firmware kiểm tra module tại `0x27`, rồi `0x21` lúc khởi động: thông số module ghi `0x27`, nhưng [ví dụ Arduino chính thức OhStem](https://github.com/AITT-VN/documents/blob/main/docs/source/yolo_uno/arduino_yolo_uno/lcd1602.rst) dùng `0x21`. Serial in kết quả kiểm tra và địa chỉ khởi tạo. Nếu cả hai không phản hồi, Serial báo lỗi nhưng đầu đọc vẫn hoạt động và thử khởi tạo LCD lại mỗi 2 giây cho đến khi thành công. Nếu có đèn nền mà không có chữ, kiểm tra log Serial 115200 sau Reset; đèn nền sáng không chứng minh giao tiếp I²C thành công. Thư viện LCD được khai báo trong PlatformIO. LCD hiển thị hai dòng, không dấu:
+
+| Kết quả | Dòng 1 | Dòng 2 |
+| --- | --- | --- |
+| Backend xác nhận điểm danh thành công | `Diem danh ok` | MSSV sinh viên |
+| MSSV không thuộc lớp | `Diem danh` | `that bai` |
+| Khối 4 trống | `The khong co` | `du lieu` |
+| Đã điểm danh trong phiên | `Da diem danh` | MSSV sinh viên |
+| Ngoài phiên | `Ngoai phien` | `Chua mo/het gio` |
+| Không đọc được UID hoặc MSSV | `Diem danh` | `that bai` |
+| Không xác nhận được API | `Loi ket noi API` | `Quet lai the` |
+
+Chỉ hiển thị `Diem danh ok` sau phản hồi xác nhận của backend, không coi đọc được thẻ là điểm danh thành công. Mỗi lần quét mới sẽ thay nội dung cũ; mỗi dòng tối đa 16 ký tự, đủ MSSV mà hệ thống cấp thẻ hỗ trợ. Hai dòng được căn giữa. Sau khi hiển thị kết quả 5 giây mà không quét tiếp, LCD trở về `San sang` / `Cham the SV`; bộ đếm không chặn việc quét thẻ và được tính lại khi có kết quả mới.
 
 ### 5.2. Cài thư viện và nạp firmware
 
@@ -298,6 +316,14 @@ Mở `iot\card-reader` bằng VS Code có PlatformIO. Thư viện được khai 
 - `bblanchon/ArduinoJson@7.4.2`
 
 Sau khi tạo cấu hình ở mục 5.3, chọn **PlatformIO: Upload** để build và nạp firmware vào board qua USB.
+
+Môi trường build/upload của trạm đọc là **`yolo-uno`**:
+
+```powershell
+cd iot\card-reader
+pio run -e yolo-uno
+pio run -e yolo-uno -t upload
+```
 
 ### 5.3. Cấu hình trạm trên máy chạy backend
 
@@ -375,7 +401,22 @@ Không đưa tệp `DeviceLocal.h` lên GitHub hoặc chia sẻ công khai vì t
 
 ## 6. Thiết lập trạm ghi thẻ
 
-Trạm ghi thẻ dùng **ESP32-S3** (YOLO UNO) và module RC522 thật, nạp firmware trong `iot\card-writer` bằng PlatformIO. Mở terminal tại thư mục gốc repository, kích hoạt môi trường Python của backend rồi chạy:
+Trạm cấp/ghi thẻ dùng **AI-Thinker NodeMCU-32S (ESP32)** và module RC522 thật, nạp firmware trong `iot\card-writer` bằng PlatformIO. Nối dây:
+
+| RC522 | NodeMCU-32S |
+| --- | --- |
+| SDA (SS) | IO21 (GPIO 21) |
+| SCK | IO18 (GPIO 18) |
+| MOSI | IO23 (GPIO 23) |
+| MISO | IO19 (GPIO 19) |
+| RST | IO22 (GPIO 22) |
+| 3.3V | 3V3 |
+| GND | GND |
+| IRQ | Không nối |
+
+Module buzzer ba chân dùng nguồn 5V: `S` nối **IO25 (GPIO 25)**, `+` nối **5V**, `-` nối **GND**; module phải hỗ trợ tín hiệu điều khiển 3.3V. Rút USB trước khi nối; RC522 chỉ cấp 3.3V.
+
+Mở terminal tại thư mục gốc repository, kích hoạt môi trường Python của backend rồi chạy:
 
 ```powershell
 cd iot\card-writer
@@ -383,6 +424,16 @@ cd iot\card-writer
 ```
 
 Sau khi script tạo cấu hình, mở thư mục `iot\card-writer` trong VS Code và chọn **PlatformIO: Upload** để nạp firmware vào board qua USB.
+
+Môi trường build/upload của trạm ghi là **`nodemcu-32s`**:
+
+```powershell
+cd iot\card-writer
+pio run -e nodemcu-32s
+pio run -e nodemcu-32s -t upload
+```
+
+**Nếu hoán đổi hai board đã sử dụng:** giữ `iot\card-reader\DeviceLocal.h` tại project reader và `iot\card-writer\DeviceLocal.h` tại project writer, không hoán đổi hai tệp này. ID/key gắn với vai trò, không gắn với board vật lý; các biến `READER_*` trong project writer vẫn là cấu hình của writer, khớp với `CARD_WRITER_ID`/`CARD_WRITER_KEY` trên backend. Không chạy lại setup hoặc đổi khóa. Nạp project reader lên YOLO UNO, project writer lên NodeMCU-32S, chọn đúng cổng COM của từng board; môi trường upload cũ không còn dùng được. Dây RC522/buzzer đang nối đúng trên từng board có thể giữ nguyên vì cấu hình chân đã chuyển theo board.
 
 Chạy setup từ thư mục `iot\card-writer`, trong PowerShell đã kích hoạt môi trường Python của backend. Với HTTPS, dùng `.\setup.ps1 -SkipWifi` khi cấu hình lần đầu, sau đó điền Wi-Fi, URL, CA và tắt HTTP trong `iot\card-writer\DeviceLocal.h` như ví dụ mục 5.3. Đồng bộ `CARD_WRITER_ID`, `CARD_WRITER_KEY` với backend triển khai và khởi động lại backend. Nếu tệp đã tồn tại, sửa cấu hình tại chỗ, không chạy lại setup. Nếu cần chạy lại riêng bước khởi tạo trạm sau lỗi, từ thư mục `backend` chạy `python -m app.cards.writer`.
 

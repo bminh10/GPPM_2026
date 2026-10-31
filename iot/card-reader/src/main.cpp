@@ -2,10 +2,12 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
+#include <LiquidCrystal_I2C.h>
 #include <MFRC522.h>
 #include <SPI.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <Wire.h>
 #include <time.h>
 #include "ReaderConfig.h"
 
@@ -22,6 +24,58 @@ bool scanned = false;
 WiFiClient plainClient;
 WiFiClientSecure secureClient;
 HTTPClient http;
+LiquidCrystal_I2C lcd(LCD_ADDRESS, LCD_COLUMNS, LCD_ROWS);
+bool lcdReady = false;
+bool lcdIdlePending = false;
+unsigned long lastDisplayAt = 0;
+unsigned long lastLcdInitAttempt = 0;
+
+void showDisplay(const String& title, const String& detail = "") {
+  if (!lcdReady) return;
+  const String lines[] = {title, detail};
+  for (uint8_t row = 0; row < LCD_ROWS; ++row) {
+    const size_t length = lines[row].length() < LCD_COLUMNS ? lines[row].length() : LCD_COLUMNS;
+    const size_t padding = (LCD_COLUMNS - length) / 2;
+    lcd.setCursor(0, row);
+    for (uint8_t column = 0; column < LCD_COLUMNS; ++column) {
+      lcd.write(column >= padding && column < padding + length ? lines[row][column - padding] : ' ');
+    }
+  }
+  lastDisplayAt = millis();
+  lcdIdlePending = true;
+}
+
+void displayInit() {
+  lastLcdInitAttempt = millis();
+  if (!Wire.begin(LCD_SDA, LCD_SCL)) {
+    Serial.println("ERROR: LCD I2C initialization failed.");
+    return;
+  }
+  Wire.setTimeOut(100);
+  // OhStem's Arduino example uses 0x21; some module specifications list 0x27.
+  const uint8_t addresses[] = {LCD_ADDRESS, 0x21};
+  uint8_t detectedAddress = 0;
+  for (const uint8_t address : addresses) {
+    Wire.beginTransmission(address);
+    const uint8_t error = Wire.endTransmission();
+    Serial.printf("LCD probe: address=0x%02X, I2C status=%u\n", address, error);
+    if (error == 0) {
+      detectedAddress = address;
+      break;
+    }
+  }
+  if (detectedAddress == 0) {
+    Serial.println("ERROR: LCD not responding at 0x27 or 0x21. Check I2C4 cable, 3.3V and address.");
+    return;
+  }
+  lcd = LiquidCrystal_I2C(detectedAddress, LCD_COLUMNS, LCD_ROWS);
+  lcd.init();
+  lcd.backlight();
+  lcdReady = true;
+  Serial.printf("LCD initialized: address=0x%02X, SDA=%u, SCL=%u\n", detectedAddress, LCD_SDA, LCD_SCL);
+  showDisplay("San sang", "Cham the SV");
+  lcdIdlePending = false;
+}
 
 void closeScanConnection() {
   http.end();
@@ -134,6 +188,10 @@ bool sendReport(const JsonDocument& report, String& mssv, String& attendanceStat
       return false;
     }
     if (ack["mssv"].is<const char*>()) mssv = ack["mssv"].as<String>();
+    if (attendanceStatus == "recorded" && mssv.isEmpty()) {
+      Serial.println("ERROR: Recorded attendance response missing MSSV; attendance NOT confirmed.");
+      return false;
+    }
     Serial.printf("Attendance: %s\n", ack["attendance"]["message"].as<const char*>());
   }
   return delivered;
@@ -141,6 +199,9 @@ bool sendReport(const JsonDocument& report, String& mssv, String& attendanceStat
 
 void setup() {
   Serial.begin(115200);
+  delay(1000);
+  Serial.println("Smart OU reader: YOLO UNO ESP32-S3 (USB CDC).");
+  displayInit();
   buzzerInit();
   SPI.begin(RFID_SCK, RFID_MISO, RFID_MOSI, RFID_SS);
   reader.PCD_Init();
@@ -162,6 +223,13 @@ void setup() {
 }
 
 void loop() {
+  if (!lcdReady && millis() - lastLcdInitAttempt >= 2000) {
+    displayInit();
+  }
+  if (lcdIdlePending && millis() - lastDisplayAt >= LCD_IDLE_TIMEOUT_MS) {
+    showDisplay("San sang", "Cham the SV");
+    lcdIdlePending = false;
+  }
   if (strlen(READER_WIFI_SSID) && WiFi.status() != WL_CONNECTED &&
       millis() - lastWifiAttempt >= 15000) {
     lastWifiAttempt = millis();
@@ -173,11 +241,13 @@ void loop() {
   const unsigned long scanAt = millis();
   if (!reader.PICC_ReadCardSerial()) {
     Serial.println("ERROR: Card detected but UID read failed.");
+    showDisplay("Diem danh", "that bai");
     beep(2, 100);
     return;
   }
   scanned = true;
   lastScan = millis();
+  showDisplay("Dang doc the", "Vui long doi");
   beep(1, 80);
   const auto type = reader.PICC_GetType(reader.uid.sak);
   JsonDocument report;
@@ -235,11 +305,28 @@ void loop() {
   Serial.printf("TIMING: tap->result %lu ms\n", millis() - scanAt);
   Serial.println(delivered ? "API: received scan." : "API: scan NOT confirmed.");
   Serial.println("==================================");
-  if (!delivered) beep(3, 100);
+  if (!delivered) {
+    showDisplay("Loi ket noi API", "Quet lai the");
+    beep(3, 100);
+  }
   else if (attendanceStatus != "recorded") {
+    if (attendanceStatus == "duplicate") {
+      showDisplay("Da diem danh", mssv);
+    } else if (attendanceStatus == "outside") {
+      showDisplay("Ngoai phien", "Chua mo/het gio");
+    } else if (report["read_status"].as<String>() == "ok" &&
+               report["block"].as<int>() == DATA_BLOCK &&
+               report["data_hex"].as<String>() == "00000000000000000000000000000000") {
+      showDisplay("Diem danh", "that bai");
+    } else if (mssv.isEmpty()) {
+      showDisplay("Diem danh", "that bai");
+    } else {
+      showDisplay("Diem danh", "that bai");
+    }
     Serial.printf("Buzzer: 2 beeps; attendance not added (%s).\n", attendanceStatus.c_str());
     beep(2, 100);
   } else {
+    showDisplay("Diem danh ok", mssv);
     Serial.printf("MSSV: %s. Buzzer: 1 beep; attendance recorded, student identity NOT verified.\n", mssv.c_str());
     beep(1, 100);
   }

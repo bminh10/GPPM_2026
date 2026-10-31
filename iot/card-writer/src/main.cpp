@@ -148,7 +148,7 @@ String uidText() {
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("CampusOpt writer: YOLO UNO ESP32-S3 (USB CDC).");
+  Serial.println("Smart OU writer: AI-Thinker NodeMCU-32S ESP32.");
   Serial.printf("RC522 pins: SCK=%u, MISO=%u, MOSI=%u, SS=%u, RST=%u; buzzer=%u\n",
                 RFID_SCK, RFID_MISO, RFID_MOSI, RFID_SS, RFID_RST, BUZZER_PIN);
   buzzerInit();
@@ -157,7 +157,7 @@ void setup() {
   const byte version = reader.PCD_ReadRegister(MFRC522::VersionReg);
   Serial.printf("Writer RC522 version: 0x%02X\n", version);
   if (version == 0 || version == 0xFF) {
-    Serial.println("ERROR: RC522 not responding. Check 3.3V, common GND and YOLO UNO D-pin wiring.");
+    Serial.println("ERROR: RC522 not responding. Check 3.3V, common GND and NodeMCU-32S GPIO wiring.");
   }
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
