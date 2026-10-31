@@ -23,3 +23,13 @@
 - Giảm độ trễ khi quét thẻ RFID.
 - Sửa vị trí nút báo lỗi và nội dung cảnh báo trên giao diện.
 - Bỏ ràng buộc unique cho username.
+
+## [1.1.0] - 2026-10-31
+
+### Thêm mới
+- Cập nhật giao diện mới.
+- Bổ sung chức năng tự động bật/tắt đèn.
+- Bổ sung phân quyền và quy trình phê duyệt: cán bộ, nhân viên cần được admin phê chuẩn trước khi sửa dữ liệu.
+
+### Thay đổi
+- Chuyển chức năng điểm danh từ theo cơ sở sang theo lớp.
